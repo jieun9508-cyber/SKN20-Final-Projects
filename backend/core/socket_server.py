@@ -205,12 +205,26 @@ async def draw_join(sid, data):
 
 @sio.event
 async def draw_start(sid, data):
-    """[수정일: 2026-02-27] 캐치마인드 게임 시작 처리"""
+    """[수정일: 2026-03-03] 캐치마인드 게임 시작 처리 (Double Start 및 점수 리셋 버그 수정)"""
     room_id = data.get('room_id', '').strip()
     if room_id in draw_rooms:
+        room = draw_rooms[room_id]
+        # [추가 2026-03-03] 이미 진행 중인 방이면 무시 (동시 REMATCH 클릭에 의한 Double Start 방지)
+        if room.get('phase') == 'playing':
+            print(f"⚠️ [ArchDraw] Ignore draw_start: Room {room_id} is already playing.")
+            return
+
         print(f"🚀 [ArchDraw] Game Start in Room: {room_id}")
-        draw_rooms[room_id]['phase'] = 'playing'
+        room['phase'] = 'playing'
         
+        # [추가 2026-03-03] 게임 시작/다시 시작 시 기존 플레이어 상태(점수, 제출 등) 완전 초기화
+        for p in room.get('players', []):
+            p['score'] = 0
+            p['last_pts'] = 0
+            p['last_checks'] = []
+            p['last_nodes'] = []
+            p['last_arrows'] = []
+            p['submitted'] = False
         # [수정일: 2026-03-03] DB(unit03) 미션 lazy 로드
         missions = await _get_missions()
         if not missions:
@@ -246,7 +260,7 @@ async def draw_start(sid, data):
 async def run_draw_room_tick(room_id):
     """[추가 2026-03-03] 사용자가 아무것도 하지 않아도 힌트/장애가 발동되도록 주기적으로 감사(Poll)"""
     print(f"⏰ [ArchDraw] Periodic check started for room: {room_id}")
-    while room_id in draw_rooms and draw_rooms[room_id].get('phase') == 'playing':
+    while room_id in draw_rooms and draw_rooms[room_id].get('phase') in ('playing', 'evaluating'):
         room_state = draw_room_states.get(room_id)
         if room_state and room_state.state == GameState.PLAYING:
             # 방에 있는 모든 플레이어에 대해 체크 시도
@@ -308,18 +322,37 @@ async def draw_submit(sid, data):
     if all(p.get('submitted') for p in room['players']) and len(room['players']) == 2:
         p1, p2 = room['players']
         print(f"📊 [ArchDraw] Both submitted in room {room_id}. Triggering AI Evaluation.")
-        
+
+        # [버그수정] AI 평가 전에 phase를 'evaluating'으로 변경
+        # → 평가 중 REMATCH 클릭 시 draw_start가 차단되지 않도록 함
+        room['phase'] = 'evaluating'
+
+        # [버그수정] await 전에 점수/결과를 스냅샷으로 캡처
+        # → AI 평가 대기 중 draw_start가 p['score']를 0으로 리셋해도 올바른 값 유지
+        p1_snap = {
+            'sid': p1['sid'], 'score': p1['score'],
+            'last_pts': p1.get('last_pts', 0), 'last_checks': p1.get('last_checks', []),
+            'last_nodes': p1.get('last_nodes', []), 'last_arrows': p1.get('last_arrows', []),
+            'name': p1['name']
+        }
+        p2_snap = {
+            'sid': p2['sid'], 'score': p2['score'],
+            'last_pts': p2.get('last_pts', 0), 'last_checks': p2.get('last_checks', []),
+            'last_nodes': p2.get('last_nodes', []), 'last_arrows': p2.get('last_arrows', []),
+            'name': p2['name']
+        }
+
         # EvalAgent를 통한 AI 평가 실행
         ai_reviews = {}
         room_state = draw_room_states.get(room_id)
         if room_state:
             try:
                 rubric = {"required_components": room_state.mission_required}
-                print(f"🤖 [ArchDraw] AI Eval Start | mission='{room_state.mission_title}' | p1='{p1['name']}({len(p1['last_nodes'])}nodes)' | p2='{p2['name']}({len(p2['last_nodes'])}nodes)'")
+                print(f"🤖 [ArchDraw] AI Eval Start | mission='{room_state.mission_title}' | p1='{p1_snap['name']}({len(p1_snap['last_nodes'])}nodes)' | p2='{p2_snap['name']}({len(p2_snap['last_nodes'])}nodes)'")
                 ai_reviews = await wars_orchestrator.on_both_submitted(
                     room_state, room_state.mission_title, rubric,
-                    {"name": p1['name'], "pts": p1['last_pts'], "checks": p1['last_checks'], "nodes": p1['last_nodes'], "arrows": p1['last_arrows']},
-                    {"name": p2['name'], "pts": p2['last_pts'], "checks": p2['last_checks'], "nodes": p2['last_nodes'], "arrows": p2['last_arrows']}
+                    {"name": p1_snap['name'], "pts": p1_snap['last_pts'], "checks": p1_snap['last_checks'], "nodes": p1_snap['last_nodes'], "arrows": p1_snap['last_arrows']},
+                    {"name": p2_snap['name'], "pts": p2_snap['last_pts'], "checks": p2_snap['last_checks'], "nodes": p2_snap['last_nodes'], "arrows": p2_snap['last_arrows']}
                 )
                 print(f"✅ [ArchDraw] AI Eval Done | p1_review={bool(ai_reviews.get('player1'))} | p2_review={bool(ai_reviews.get('player2'))}")
             except Exception as e:
@@ -337,24 +370,24 @@ async def draw_submit(sid, data):
             }
             print(f"⚠️ [ArchDraw] Using fallback evaluation for room {room_id}")
 
-        # 결과 전송 - 프론트엔드 .find() 호환 및 데이터 무결성을 위해 리스트 형식으로 변경
+        # 결과 전송 - 스냅샷 값 사용 (await 중 draw_start로 인한 점수 변조 방지)
         results = [
             {
-                "sid": p1['sid'], 
-                "score": p1['score'], 
-                "last_pts": p1.get('last_pts', 0), 
-                "last_checks": p1.get('last_checks', []), 
-                "last_nodes": p1.get('last_nodes', []),
-                "last_arrows": p1.get('last_arrows', []),
+                "sid": p1_snap['sid'],
+                "score": p1_snap['score'],
+                "last_pts": p1_snap['last_pts'],
+                "last_checks": p1_snap['last_checks'],
+                "last_nodes": p1_snap['last_nodes'],
+                "last_arrows": p1_snap['last_arrows'],
                 "ai_review": ai_reviews.get('player1')
             },
             {
-                "sid": p2['sid'], 
-                "score": p2['score'], 
-                "last_pts": p2.get('last_pts', 0), 
-                "last_checks": p2.get('last_checks', []), 
-                "last_nodes": p2.get('last_nodes', []),
-                "last_arrows": p2.get('last_arrows', []),
+                "sid": p2_snap['sid'],
+                "score": p2_snap['score'],
+                "last_pts": p2_snap['last_pts'],
+                "last_checks": p2_snap['last_checks'],
+                "last_nodes": p2_snap['last_nodes'],
+                "last_arrows": p2_snap['last_arrows'],
                 "ai_review": ai_reviews.get('player2')
             }
         ]
@@ -364,16 +397,25 @@ async def draw_submit(sid, data):
         # [수정일: 2026-03-03] 1라운드 단판 승부 설정에 맞춰 전적 저장 (프론트엔드 maxRounds=1 대응)
         if room.get('current_round', 1) >= 1:
             print(f"🏆 [ArchDraw] Game Over in Room {room_id}. Saving to DB.")
-            if p1['score'] > p2['score']:
+
+            # [버그수정] draw_start가 AI 평가 중 호출돼 phase가 이미 'playing'으로 바뀐 경우
+            # 새 게임을 덮어쓰지 않도록 'evaluating' 상태일 때만 'gameover'로 전환
+            if room.get('phase') == 'evaluating':
+                room['phase'] = 'gameover'
+                await sio.emit('draw_game_over', {}, room=room_id)
+            else:
+                print(f"⚠️ [ArchDraw] Skipping gameover emit — room already in new game phase: {room.get('phase')}")
+
+            # 스냅샷 점수 기준으로 전적 저장 (await 중 점수 변조 방지)
+            if p1_snap['score'] > p2_snap['score']:
                 await update_battle_record(p1.get('user_id'), 'win')
                 await update_battle_record(p2.get('user_id'), 'lose')
-            elif p1['score'] < p2['score']:
+            elif p1_snap['score'] < p2_snap['score']:
                 await update_battle_record(p1.get('user_id'), 'lose')
                 await update_battle_record(p2.get('user_id'), 'win')
             else:
                 await update_battle_record(p1.get('user_id'), 'draw')
                 await update_battle_record(p2.get('user_id'), 'draw')
-            await sio.emit('draw_game_over', {}, room=room_id)
 
 @sio.event
 async def draw_next_round(sid, data):

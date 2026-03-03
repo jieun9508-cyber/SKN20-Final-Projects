@@ -290,7 +290,7 @@
           <div class="r-title">{{ resultLabel }}</div>
           <div class="r-compare">
             <div class="rc-side">
-              <span class="rc-tag you-tag">{{ userName }} (Player {{ myPlayerNum }})</span>
+              <span class="rc-tag you-tag">{{ userName }}</span>
               <span class="rc-score neon-c">+{{ lastMyPts }}</span>
               <div class="rc-header">YOUR ARCHITECTURE</div>
               <div class="rc-checks">
@@ -299,7 +299,7 @@
             </div>
             <div class="rc-vs">VS</div>
             <div class="rc-side">
-              <span class="rc-tag opp-tag">{{ ds.opponentName.value || 'OPP' }} (Player {{ oppPlayerNum }})</span>
+              <span class="rc-tag opp-tag">{{ ds.opponentName.value || 'OPP' }}</span>
               <span class="rc-score" style="color:#ff2d75">+{{ lastOppPts }}</span>
               <div class="rc-header" style="color:#ff2d75">OPPONENT ARCHITECTURE</div>
               <!-- [수정일: 2026-02-24] 상대방 체크리스트 공개 -->
@@ -338,16 +338,16 @@
         <div class="go-box">
           <h1 class="go-title glitch" data-text="GAME OVER">GAME OVER</h1>
           <div class="go-final">
-            <div class="go-fs"><span>{{ userName }} (P{{ myPlayerNum }})</span><strong class="neon-c">{{ myScore }}</strong></div>
+            <div class="go-fs"><span>{{ userName }}</span><strong class="neon-c">{{ myScore }}</strong></div>
             <span class="go-vs">VS</span>
-            <div class="go-fs"><span>{{ ds.opponentName.value || 'OPP' }} (P{{ oppPlayerNum }})</span><strong style="color:#ff2d75">{{ oppScore }}</strong></div>
+            <div class="go-fs"><span>{{ ds.opponentName.value || 'OPP' }}</span><strong style="color:#ff2d75">{{ oppScore }}</strong></div>
           </div>
           <div class="go-verdict">{{ myScore > oppScore ? '🏆 YOU WIN!' : myScore === oppScore ? '🤝 DRAW' : '💪 DEFEAT' }}</div>
 
           <!-- [추가: 2026-03-03] 최종 아키텍처 비교 섹션 복구 -->
           <div class="r-compare go-compare">
             <div class="rc-side">
-              <span class="rc-tag you-tag" style="font-size: 0.8em; padding: 2px 8px;">{{ userName }} (P{{ myPlayerNum }})</span>
+              <span class="rc-tag you-tag" style="font-size: 0.8em; padding: 2px 8px;">{{ userName }}</span>
               <div class="rc-header" style="font-size: 0.9em; margin-top: 5px;">YOUR ARCHITECTURE</div>
               <div class="rc-checks">
                 <div v-for="(c,i) in checkItems" :key="'gcheck'+i" class="chk" :class="c.ok?'chk-ok':'chk-miss'" style="font-size: 0.85em;">{{ c.ok?'✅':'❌' }} {{ c.label }}</div>
@@ -355,7 +355,7 @@
             </div>
             <div class="rc-vs" style="font-size: 1.2em; opacity: 0.5;">VS</div>
             <div class="rc-side">
-              <span class="rc-tag opp-tag" style="font-size: 0.8em; padding: 2px 8px;">{{ ds.opponentName.value || 'OPP' }} (P{{ oppPlayerNum }})</span>
+              <span class="rc-tag opp-tag" style="font-size: 0.8em; padding: 2px 8px;">{{ ds.opponentName.value || 'OPP' }}</span>
               <div class="rc-header" style="color:#ff2d75; font-size: 0.9em; margin-top: 5px;">OPPONENT ARCHITECTURE</div>
               <div class="rc-checks">
                 <div v-for="(c,i) in oppCheckItems" :key="'gopp'+i" class="chk" :class="c.ok?'chk-ok-opp':'chk-miss'" style="font-size: 0.85em;">{{ c.ok?'✅':'❌' }} {{ c.label }}</div>
@@ -782,6 +782,12 @@ function spawnPopText(txt, color) {
 // [수정일: 2026-02-24] 라운드 결과 수신 및 심사(Judging) 단계 진입
 ds.onRoundResult.value = (results) => {
   if (!results) return
+  // [버그수정] round.value === 0이면 beginGame()이 호출됐지만 새 라운드가 아직 시작 안 된 상태
+  // → AI 평가 지연으로 인한 이전 게임 결과가 뒤늦게 도착한 것이므로 무시
+  if (round.value === 0) {
+    console.warn('[ArchDraw] Stale round result ignored (new game starting)')
+    return
+  }
   const me = results.find(r => r.sid === ds.socket.value?.id)
   const opp = results.find(r => r.sid !== ds.socket.value?.id)
   
@@ -851,11 +857,23 @@ ds.onRoundStart.value = (data) => {
   handleCanvasChange();
   
   clearInterval(timer);
+  const startTime = Date.now();
+  const initTime = 90;
+  timeLeft.value = initTime;
+  
+  // [수정일: 2026-03-03] 브라우저 백그라운드 스로틀링을 방어하기 위해 Date.now() 기반 시간 차단 처리
   timer = setInterval(() => {
-    if (timeLeft.value > 0 && phase.value === 'play') timeLeft.value--;
-    if (timeLeft.value <= 0 && phase.value === 'play') submitDraw();
+    if (phase.value !== 'play') return;
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const remain = initTime - elapsed;
+    
+    if (remain > 0) {
+      timeLeft.value = remain;
+    } else {
+      timeLeft.value = 0;
+      submitDraw();
+    }
   }, 1000);
-
   // [수정일: 2026-02-24] 라운드 데이터 초기화
   aiReview.value = { my: '', comparison: '' }
   inventory.value = { ink: 1, shake: 1, glitch: 1, scan: 1, swap: 1 }
@@ -1036,6 +1054,14 @@ function exitGame() {
 watch(totalItems, (newVal) => {
   ds.emitItemStatus(currentRoomId.value, newVal > 0)
 })
+
+// [추가 2026-03-03] 상대방 중도 퇴장 시 무한 대기 방지 (진행 불가 버그 수정)
+watch(() => ds.roomPlayers.value, (players) => {
+  if (players && players.length < 2 && (phase.value === 'play' || phase.value === 'judging')) {
+    alert("상대방이 게임에서 퇴장했습니다. 대기열로 돌아갑니다.");
+    exitGame();
+  }
+}, { deep: true })
 </script>
 
 <style scoped>
@@ -1435,7 +1461,7 @@ watch(totalItems, (newVal) => {
 .rc-tag{font-family:'Orbitron',sans-serif;font-size:.55rem;font-weight:700;padding:2px 8px;border-radius:3px}
 .rc-score{font-family:'Orbitron',sans-serif;font-size:1.5rem;font-weight:900}
 .rc-vs{font-family:'Orbitron',sans-serif;color:#334155;font-weight:900;align-self:center;margin-top:20px}
-.rc-header{font-family:'Orbitron',sans-serif;font-size:0.55rem;font-weight:700;color:#00f0ff;letter-spacing:1px;margin:8px 0 4px;opacity:0.8}
+.rc-header{font-family:'Orbitron',sans-serif;font-size:0.55rem;font-weight:700;color:#00f0ff;letter-spacing:1px;margin:8px 0 4px;opacity:0.8;min-height:24px;display:flex;align-items:flex-end;justify-content:center;text-align:center;word-break:keep-all;}
 .rc-checks{text-align:left;font-size:.65rem;width:100%}
 .chk{padding:.1rem .3rem;border-radius:.2rem;margin:.1rem 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.chk-ok{color:#39ff14;background:rgba(57,255,20,.04)}.chk-ok-opp{color:#ff2d75;background:rgba(255,45,117,.04)}.chk-miss{color:#334155;background:rgba(51,65,85,.04)}
 .btn-next{width:100%;padding:.6rem;font-family:'Orbitron',sans-serif;font-size:.75rem;font-weight:700;background:transparent;border:2px solid #00f0ff;color:#00f0ff;border-radius:.5rem;cursor:pointer;letter-spacing:2px;transition:all .2s;margin-top:.5rem}
