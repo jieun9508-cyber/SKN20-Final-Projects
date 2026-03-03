@@ -3,6 +3,8 @@ from .session_view import InterviewSessionView, InterviewSessionDetailView, Inte
 from .answer_view import InterviewAnswerView
 from .stt_view import STTTranscribeView
 from .tts_view import TTSSynthesizeView
+# 2026-03-01 면접 질문 뱅크 검색 API 추가
+from .question_bank_view import InterviewQuestionSearchView
 __all__ = [
     'InterviewJobPostingView',
     'InterviewJobPostingDetailView',
@@ -12,4 +14,5 @@ __all__ = [
     'InterviewAnswerView',
     'STTTranscribeView',
     'TTSSynthesizeView',
+    'InterviewQuestionSearchView',  # 2026-03-01 면접 질문 뱅크 검색 API 추가
 ]

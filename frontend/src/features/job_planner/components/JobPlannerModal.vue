@@ -22,23 +22,15 @@
           <button
             :class="['flow-tab', { active: currentStep === 'profile' }]"
             @click="currentStep = 'profile'"
-            :disabled="!jobData"
           >
             2. 내 정보
-          </button>
-          <button
-            :class="['flow-tab', { active: currentStep === 'agent' }]"
-            @click="currentStep = 'agent'"
-            :disabled="!analysisResult"
-          >
-            3. 추가 질문
           </button>
           <button
             :class="['flow-tab', { active: currentStep === 'result' }]"
             @click="currentStep = 'result'"
             :disabled="!analysisResult"
           >
-            4. 최종 결과
+            3. 최종 결과
           </button>
         </div>
 
@@ -57,15 +49,23 @@
                 placeholder="https://www.jobkorea.co.kr/..."
                 class="url-input"
               >
-              <p class="input-hint">
-                잡코리아, 사람인, 원티드 등의 채용공고 URL을 입력하세요
-              </p>
+              <p class="input-hint">잡코리아, 사람인, 원티드 등의 채용공고 URL을 입력하세요</p>
+
+              <label style="margin-top: 12px;">기업 URL <span class="optional">(선택)</span></label>
+              <input
+                v-model="companyUrl"
+                type="text"
+                placeholder="https://company.com 또는 https://www.wanted.co.kr/company/..."
+                class="url-input"
+              >
+              <p class="input-hint">회사 홈페이지나 원티드 기업 페이지를 입력하면 기업분석도 함께 진행됩니다</p>
+
               <button
                 class="btn-parse"
                 @click="parseJobPosting"
                 :disabled="!urlInput || isParsing"
               >
-                <span v-if="!isParsing">🔍 공고 분석</span>
+                <span v-if="!isParsing">🔍 분석 시작</span>
                 <span v-else>⏳ 분석 중...</span>
               </button>
             </div>
@@ -224,75 +224,102 @@
                 </div>
               </div>
 
+              <!-- 기업분석 상태 표시 -->
+              <div v-if="isAnalyzingCompany || companyAnalysis" class="company-analysis-section">
+                <div v-if="isAnalyzingCompany" class="company-analyzing-msg">
+                  ⏳ 기업 분석 중...
+                </div>
+                <div v-if="companyAnalysis" class="company-analysis-preview">
+                  <div class="preview-badge">✅ 기업분석 완료</div>
+                  <div class="preview-score">
+                    종합 점수: {{ (companyAnalysis.overall_score?.total_score * 100).toFixed(0) }}점
+                  </div>
+                </div>
+              </div>
+
               <div class="job-preview-actions">
                 <button class="btn-reset-job" @click="resetJobData">
                   🔄 공고 초기화
                 </button>
-                <button class="btn-next" @click="currentStep = 'profile'">
-                  다음: 내 정보 입력 →
-                </button>
               </div>
+            </div>
+
+            <div class="step-next-row">
+              <button class="btn-next" @click="currentStep = 'profile'">
+                <span v-if="isParsing">⏳ 분석 중... 내 정보 먼저 입력 →</span>
+                <span v-else>다음: 내 정보 입력 →</span>
+              </button>
             </div>
           </div>
 
           <!-- Step 2: 내 프로필 -->
           <div v-if="currentStep === 'profile'" class="profile-step">
             <h3 class="step-title">내 정보를 입력하세요</h3>
+            <div v-if="isParsing" class="parsing-background-notice">
+              ⏳ 채용공고 분석이 백그라운드에서 진행 중입니다. 완료되면 자동으로 반영됩니다.
+            </div>
 
             <div class="profile-form">
-              <!-- 기업분석 섹션 (먼저 실행되도록 최상단 배치) -->
-              <div class="company-analysis-section">
-                <h4 class="section-subtitle">🏢 기업 분석 (선택사항)</h4>
-                <p class="section-hint">⏱️ 시간이 걸리니 먼저 분석을 시작하고, 아래 정보를 입력하세요</p>
+              <!-- 서류 업로드 섹션 -->
+              <div class="form-section document-upload-section">
+                <h4 class="form-section-title">📄 서류 업로드 <span class="optional">(선택)</span></h4>
+                <p class="input-hint">이력서, 자기소개서, 포트폴리오를 업로드하면 아래 정보를 자동으로 채워드립니다</p>
 
-                <div class="company-input-tabs">
-                  <button
-                    :class="['company-tab', { active: companyAnalysisType === 'url' }]"
-                    @click="companyAnalysisType = 'url'"
-                  >
-                    🔗 URL
-                  </button>
-                  <button
-                    :class="['company-tab', { active: companyAnalysisType === 'text' }]"
-                    @click="companyAnalysisType = 'text'"
-                  >
-                    📝 텍스트
-                  </button>
-                </div>
-
-                <div v-if="companyAnalysisType === 'url'" class="company-input-panel">
-                  <input
-                    v-model="companyUrl"
-                    type="text"
-                    placeholder="https://company.com 또는 https://www.wanted.co.kr/company/..."
-                    class="company-input"
-                  >
-                </div>
-
-                <div v-else class="company-input-panel">
-                  <textarea
-                    v-model="companyText"
-                    rows="4"
-                    placeholder="회사 정보를 입력하세요 (예: 설립연도, 사업 분야, 기술 스택, 복지 등)"
-                    class="company-textarea"
-                  ></textarea>
+                <div class="document-upload-grid">
+                  <div class="upload-item">
+                    <span class="upload-label">이력서</span>
+                    <div class="upload-row">
+                      <label class="upload-btn" :class="{ uploaded: resumePdf }">
+                        {{ resumeFileName || '+ PDF 업로드' }}
+                        <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'resume')" hidden>
+                      </label>
+                      <button v-if="resumePdf" class="upload-clear-btn" @click="clearPdf('resume')" title="삭제">×</button>
+                    </div>
+                  </div>
+                  <div class="upload-item">
+                    <span class="upload-label">경력기술서</span>
+                    <div class="upload-row">
+                      <label class="upload-btn" :class="{ uploaded: careerDescPdf }">
+                        {{ careerDescFileName || '+ PDF 업로드' }}
+                        <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'career_description')" hidden>
+                      </label>
+                      <button v-if="careerDescPdf" class="upload-clear-btn" @click="clearPdf('career_description')" title="삭제">×</button>
+                    </div>
+                  </div>
+                  <div class="upload-item">
+                    <span class="upload-label">자기소개서</span>
+                    <div class="upload-row">
+                      <label class="upload-btn" :class="{ uploaded: coverLetterPdf }">
+                        {{ coverLetterFileName || '+ PDF 업로드' }}
+                        <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'cover_letter')" hidden>
+                      </label>
+                      <button v-if="coverLetterPdf" class="upload-clear-btn" @click="clearPdf('cover_letter')" title="삭제">×</button>
+                    </div>
+                  </div>
+                  <div class="upload-item">
+                    <span class="upload-label">포트폴리오</span>
+                    <div class="upload-row">
+                      <label class="upload-btn" :class="{ uploaded: portfolioPdf }">
+                        {{ portfolioFileName || '+ PDF 업로드' }}
+                        <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'portfolio')" hidden>
+                      </label>
+                      <button v-if="portfolioPdf" class="upload-clear-btn" @click="clearPdf('portfolio')" title="삭제">×</button>
+                    </div>
+                  </div>
                 </div>
 
                 <button
-                  v-if="(companyAnalysisType === 'url' && companyUrl) || (companyAnalysisType === 'text' && companyText)"
-                  class="btn-company-analyze"
-                  @click="analyzeCompany"
-                  :disabled="isAnalyzingCompany"
+                  v-if="resumePdf || coverLetterPdf || portfolioPdf"
+                  class="btn-parse-resume"
+                  @click="parseResumeDocuments"
+                  :disabled="isParsingDocuments"
                 >
-                  <span v-if="!isAnalyzingCompany">🔍 기업 분석하기</span>
-                  <span v-else>⏳ 분석 중...</span>
+                  <span v-if="!isParsingDocuments">✨ 서류 분석하여 자동 입력</span>
+                  <span v-else>⏳ 분석 중... (병렬 처리 중)</span>
                 </button>
 
-                <div v-if="companyAnalysis" class="company-analysis-preview">
-                  <div class="preview-badge">✅ 기업분석 완료</div>
-                  <div class="preview-score">
-                    종합 점수: {{ (companyAnalysis.overall_score?.total_score * 100).toFixed(0) }}점
-                  </div>
+                <div v-if="documentParseSuccess" class="parse-success-msg">
+                  ✅ 분석 완료! 아래 내용을 확인하고 수정하세요.
                 </div>
               </div>
 
@@ -347,7 +374,7 @@
                 </div>
 
                 <!-- 스킬 레벨 입력 -->
-                <div v-if="userSkills.length > 0" class="skill-levels-container">
+                <div class="skill-levels-container">
                   <div
                     v-for="skill in userSkills"
                     :key="skill"
@@ -367,8 +394,18 @@
                     <div class="skill-level-label">
                       {{ getLevelLabel(skillLevels[skill] || 3) }}
                     </div>
+                    <button class="skill-delete-btn" @click="removeSkill(skill)" title="삭제">×</button>
                   </div>
-                  <p class="level-guide">
+                  <div class="skill-add-row">
+                    <input
+                      v-model="newSkillInput"
+                      type="text"
+                      placeholder="스킬 추가 (예: TypeScript)"
+                      @keyup.enter="addSkill"
+                    />
+                    <button class="skill-add-btn" @click="addSkill">+ 추가</button>
+                  </div>
+                  <p v-if="userSkills.length > 0" class="level-guide">
                     1=입문 | 2=초급 | 3=중급 | 4=고급 | 5=전문가
                   </p>
                 </div>
@@ -396,6 +433,25 @@
                       placeholder="정보처리기사, AWS Solutions Architect"
                       @input="parseCertifications"
                     >
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>교육 이수 내역</label>
+                    <div class="training-list">
+                      <div v-for="(item, idx) in training" :key="idx" class="training-item">
+                        <span class="training-name">{{ item.name }}</span>
+                        <span v-if="item.institution" class="training-meta">{{ item.institution }}</span>
+                        <span v-if="item.period" class="training-meta">{{ item.period }}</span>
+                        <button class="training-delete-btn" @click="removeTraining(idx)">×</button>
+                      </div>
+                    </div>
+                    <div class="training-add-row">
+                      <input v-model="newTrainingName" type="text" placeholder="교육명 (예: SKN AI 부트캠프)" @keyup.enter="addTraining" />
+                      <input v-model="newTrainingInstitution" type="text" placeholder="기관 (선택)" />
+                      <input v-model="newTrainingPeriod" type="text" placeholder="기간 (선택)" />
+                      <button class="skill-add-btn" @click="addTraining">+ 추가</button>
+                    </div>
                   </div>
                 </div>
                 <div class="form-row">
@@ -429,54 +485,6 @@
               >
                 <span v-if="!isAnalyzing">🚀 매칭 분석 시작</span>
                 <span v-else>⏳ 분석 중...</span>
-              </button>
-            </div>
-          </div>
-
-          <!-- Step 2.5: 에이전트 추가 질문 -->
-          <div v-if="currentStep === 'agent'" class="agent-step">
-            <h3 class="step-title">📋 추가 정보가 필요합니다</h3>
-            <p class="step-description">
-              부족한 스킬에 대해 몇 가지 질문에 답변해주세요. 더 정확한 분석을 제공할 수 있습니다.
-            </p>
-
-            <!-- 질문 로딩 중 -->
-            <div v-if="agentQuestions.length === 0" class="loading-questions">
-              <div class="loading-spinner"></div>
-              <p class="loading-text">💭 맞춤형 질문을 생성하고 있습니다...</p>
-            </div>
-
-            <div v-else class="agent-questions-list">
-              <div
-                v-for="(q, idx) in agentQuestions"
-                :key="q.id"
-                class="agent-question-item"
-              >
-                <div class="question-header">
-                  <span class="question-number">Q{{ idx + 1 }}</span>
-                  <span class="question-skill">{{ q.skill }}</span>
-                </div>
-                <div class="question-text">{{ q.question }}</div>
-                <textarea
-                  v-model="agentAnswers[q.id]"
-                  rows="3"
-                  :placeholder="`${q.skill}에 대한 답변을 입력하세요...`"
-                  class="answer-input"
-                ></textarea>
-              </div>
-            </div>
-
-            <div class="agent-actions">
-              <button class="btn-skip" @click="skipAgentQuestions">
-                건너뛰기
-              </button>
-              <button
-                class="btn-generate-report"
-                @click="generateFinalReport(true)"
-                :disabled="isGeneratingReport"
-              >
-                <span v-if="!isGeneratingReport">🚀 최종 보고서 생성</span>
-                <span v-else>⏳ 보고서 생성 중...</span>
               </button>
             </div>
           </div>
@@ -640,7 +648,7 @@
             </div>
 
             <!-- Loading Recommendations -->
-            <div v-if="isLoadingRecommendations || (analysisResult && analysisResult.readiness_score < 0.6 && recommendations.length === 0 && !isLoadingRecommendations)" class="loading-recommendations">
+            <div v-if="isLoadingRecommendations" class="loading-recommendations">
               <div class="loading-spinner"></div>
               <p v-if="isLoadingRecommendations">
                 추천 공고를 찾고 있습니다... (사람인, 잡코리아 검색 중)
@@ -728,7 +736,15 @@
                   </div>
                   <p v-if="companyAnalysis.tech_stack.culture">{{ companyAnalysis.tech_stack.culture }}</p>
                   <p v-if="companyAnalysis.tech_stack.tech_blog" class="tech-blog-info">
-                    📝 {{ companyAnalysis.tech_stack.tech_blog }}
+                    📝 기술 블로그:
+                    <a
+                      v-if="companyAnalysis.tech_stack.tech_blog.startsWith('http')"
+                      :href="companyAnalysis.tech_stack.tech_blog"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="tech-blog-link"
+                    >{{ companyAnalysis.tech_stack.tech_blog }}</a>
+                    <span v-else>{{ companyAnalysis.tech_stack.tech_blog }}</span>
                   </p>
                 </div>
               </div>
@@ -943,6 +959,85 @@
               </div>
             </div>
 
+            <!-- AI 지원 도구 -->
+            <div class="action-tools-section">
+              <h3 class="action-tools-title">🛠️ AI 지원 도구</h3>
+              <div class="action-tools-buttons">
+                <button class="btn-tool" @click="reviewPortfolio" :disabled="isReviewingPortfolio">
+                  <span v-if="isReviewingPortfolio">⏳ 분석 중...</span>
+                  <span v-else>📊 포트폴리오 개선점 분석</span>
+                </button>
+              </div>
+
+              <!-- 자기소개서: 기업 문항 기반 -->
+              <div class="cover-letter-questions-section">
+                <h4 class="result-subtitle">✍️ 기업 문항별 자기소개서</h4>
+                <p class="questions-hint">기업의 자기소개서 항목을 입력하세요 (항목당 한 줄)</p>
+                <textarea
+                  v-model="coverLetterQuestions"
+                  class="questions-textarea"
+                  placeholder="예시)&#10;성장 과정을 서술하세요 (500자 이내)&#10;지원 동기를 써주세요 (700자 이내)&#10;입사 후 포부를 작성하세요 (500자 이내)"
+                  rows="5"
+                ></textarea>
+                <button
+                  class="btn-tool"
+                  @click="generateCoverLetterByQuestions"
+                  :disabled="isGeneratingCoverLetter || !coverLetterQuestions.trim()"
+                >
+                  <span v-if="isGeneratingCoverLetter">⏳ 작성 중...</span>
+                  <span v-else>✍️ 문항별 자기소개서 작성</span>
+                </button>
+              </div>
+
+              <!-- 생성된 자기소개서 -->
+              <div v-if="generatedCoverLetter" class="cover-letter-result">
+                <h4 class="result-subtitle">✍️ 자기소개서</h4>
+                <div
+                  v-for="(item, idx) in generatedCoverLetter"
+                  :key="'cl-' + idx"
+                  class="cover-letter-item"
+                >
+                  <div class="cl-question">Q{{ idx + 1 }}. {{ item.question }}</div>
+                  <pre class="cover-letter-text">{{ item.answer }}</pre>
+                </div>
+              </div>
+
+              <!-- 포트폴리오 분석 결과 -->
+              <div v-if="portfolioReview" class="portfolio-review-result">
+                <h4 class="result-subtitle">📊 포트폴리오 분석 결과</h4>
+                <div class="review-section" v-if="portfolioReview.strengths?.length">
+                  <div class="review-section-title">💪 강점</div>
+                  <ul class="review-list">
+                    <li v-for="(item, idx) in portfolioReview.strengths" :key="'ps-' + idx">{{ item }}</li>
+                  </ul>
+                </div>
+                <div class="review-section" v-if="portfolioReview.improvements?.length">
+                  <div class="review-section-title">🔧 개선 제안</div>
+                  <div
+                    class="improvement-card"
+                    v-for="(imp, idx) in portfolioReview.improvements"
+                    :key="'pi-' + idx"
+                  >
+                    <div class="imp-target">🎯 {{ imp.target }}</div>
+                    <div class="imp-issue">⚠️ {{ imp.issue }}</div>
+                    <div class="imp-suggestion">💡 {{ imp.suggestion }}</div>
+                  </div>
+                </div>
+                <div class="review-section" v-if="portfolioReview.missing?.length">
+                  <div class="review-section-title">❌ 부족한 부분</div>
+                  <ul class="review-list missing">
+                    <li v-for="(item, idx) in portfolioReview.missing" :key="'pm-' + idx">{{ item }}</li>
+                  </ul>
+                </div>
+                <div class="review-section" v-if="portfolioReview.priority_actions?.length">
+                  <div class="review-section-title">🚀 우선 실행 액션</div>
+                  <ol class="review-list priority">
+                    <li v-for="(item, idx) in portfolioReview.priority_actions" :key="'pp-' + idx">{{ item }}</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
             <button class="btn-restart" @click="resetAll">
               🔄 새로운 공고 분석하기
             </button>
@@ -987,6 +1082,31 @@ export default {
       supplementText: '',
       isSupplementParsing: false,
 
+      // 서류 업로드
+      resumePdf: null,
+      coverLetterPdf: null,
+      portfolioPdf: null,
+      careerDescPdf: null,
+      resumeFileName: '',
+      coverLetterFileName: '',
+      portfolioFileName: '',
+      careerDescFileName: '',
+      isParsingDocuments: false,
+      documentParseSuccess: false,
+      // 서류 파싱 추가 데이터
+      parsedEmail: null,
+      parsedPhone: null,
+      parsedLanguages: [],
+      parsedAwards: [],
+      parsedStrengths: [],
+      parsedWorkExperience: [],
+      parsedKeyAchievements: [],
+      parsedProjects: [],
+      parsedGithubUrl: null,
+      parsedPortfolioUrl: null,
+      parsedTeamworkExperience: null,
+      parsedGrowthStory: null,
+
       // User data
       name: '',
       currentRole: '',
@@ -994,31 +1114,39 @@ export default {
       userSkills: [],
       userSkillsInput: '',
       skillLevels: {},  // {"Python": 4, "Django": 3}
+      newSkillInput: '',
       education: '',
       certifications: [],
       certificationsInput: '',
+      training: [],
+      newTrainingName: '',
+      newTrainingInstitution: '',
+      newTrainingPeriod: '',
       careerGoals: '',
       availablePrepDays: null,
 
       // Company Analysis
-      companyAnalysisType: 'url',  // 'url' or 'text'
       companyUrl: '',
-      companyText: '',
       companyAnalysis: null,
       isAnalyzingCompany: false,
 
       // Analysis result
       analysisResult: null,
 
-      // Agent Questions & Report
-      agentQuestions: [],
-      agentAnswers: {},
+      // Agent Report
       finalReport: null,
       isGeneratingReport: false,
 
       // Recommendations
       recommendations: [],
       isLoadingRecommendations: false,
+
+      // Cover Letter & Portfolio Review
+      coverLetterQuestions: '',
+      generatedCoverLetter: null,
+      portfolioReview: null,
+      isGeneratingCoverLetter: false,
+      isReviewingPortfolio: false,
 
       // Status
       isParsing: false,
@@ -1029,6 +1157,95 @@ export default {
   methods: {
     closeModal() {
       this.$emit('close');
+    },
+
+    clearPdf(type) {
+      if (type === 'resume') { this.resumePdf = null; this.resumeFileName = ''; }
+      else if (type === 'cover_letter') { this.coverLetterPdf = null; this.coverLetterFileName = ''; }
+      else if (type === 'portfolio') { this.portfolioPdf = null; this.portfolioFileName = ''; }
+      else if (type === 'career_description') { this.careerDescPdf = null; this.careerDescFileName = ''; }
+    },
+
+    handlePdfUpload(event, type) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (type === 'resume') {
+          this.resumePdf = e.target.result;
+          this.resumeFileName = file.name;
+        } else if (type === 'cover_letter') {
+          this.coverLetterPdf = e.target.result;
+          this.coverLetterFileName = file.name;
+        } else if (type === 'portfolio') {
+          this.portfolioPdf = e.target.result;
+          this.portfolioFileName = file.name;
+        } else if (type === 'career_description') {
+          this.careerDescPdf = e.target.result;
+          this.careerDescFileName = file.name;
+        }
+      };
+      reader.readAsDataURL(file);
+    },
+
+    async parseResumeDocuments() {
+      this.isParsingDocuments = true;
+      this.documentParseSuccess = false;
+      this.errorMessage = '';
+
+      try {
+        const payload = {};
+        if (this.resumePdf) payload.resume = this.resumePdf;
+        if (this.coverLetterPdf) payload.cover_letter = this.coverLetterPdf;
+        if (this.portfolioPdf) payload.portfolio = this.portfolioPdf;
+        if (this.careerDescPdf) payload.career_description = this.careerDescPdf;
+
+        const response = await axios.post('/api/core/job-planner/parse-resume/', payload);
+        const data = response.data;
+
+        // 기본 폼 자동 채우기
+        if (data.name) this.name = data.name;
+        if (data.current_role) this.currentRole = data.current_role;
+        if (data.education) this.education = data.education;
+        if (data.certifications?.length) {
+          this.certifications = data.certifications;
+          this.certificationsInput = data.certifications.join(', ');
+        }
+        if (data.training?.length) {
+          this.training = data.training;
+        }
+        if (data.career_goals) this.careerGoals = data.career_goals;
+        if (data.experience_years) this.experienceYears = data.experience_years;
+        if (data.user_skills?.length) {
+          this.userSkills = data.user_skills;
+          this.userSkillsInput = data.user_skills.join(', ');
+        }
+        if (data.skill_levels && Object.keys(data.skill_levels).length) {
+          this.skillLevels = data.skill_levels;
+        }
+
+        // 추가 데이터 저장
+        this.parsedEmail = data.email || null;
+        this.parsedPhone = data.phone || null;
+        this.parsedLanguages = data.languages || [];
+        this.parsedAwards = data.awards || [];
+        this.parsedStrengths = data.strengths || [];
+        this.parsedWorkExperience = data.work_experience || [];
+        this.parsedKeyAchievements = data.key_achievements || [];
+        this.parsedProjects = data.projects || [];
+        this.parsedGithubUrl = data.github_url || null;
+        this.parsedPortfolioUrl = data.portfolio_url || null;
+        this.parsedTeamworkExperience = data.teamwork_experience || null;
+        this.parsedGrowthStory = data.growth_story || null;
+
+        this.documentParseSuccess = true;
+      } catch (error) {
+        console.error('서류 분석 실패:', error);
+        this.errorMessage = error.response?.data?.error || '서류 분석 중 오류가 발생했습니다.';
+      } finally {
+        this.isParsingDocuments = false;
+      }
     },
 
     async parseJobPosting() {
@@ -1050,6 +1267,10 @@ export default {
           this.checkDataCompleteness();
           const gameStore = useGameStore();
           gameStore.setLastParsedJob(this.jobData);
+          // 기업 URL이 있으면 기업분석 백그라운드 실행
+          if (this.companyUrl) {
+            this.analyzeCompany(this.companyUrl);
+          }
         }
       }
     },
@@ -1268,6 +1489,7 @@ export default {
           current_role: this.currentRole,
           education: this.education,
           certifications: this.certifications,
+          training: this.training,
           career_goals: this.careerGoals,
           available_prep_days: this.availablePrepDays,
 
@@ -1284,26 +1506,9 @@ export default {
 
         this.analysisResult = response.data;
 
-        // 부족한 스킬이 있으면 에이전트 질문 페이지로 이동
-        if (this.analysisResult.missing_skills && this.analysisResult.missing_skills.length > 0) {
-          this.currentStep = 'agent';
-
-          this.fetchAgentQuestions();
-
-          if (this.analysisResult.readiness_score < 0.6) {
-            this.fetchRecommendations();
-          }
-
-          this.generateFinalReport();
-        } else {
-          this.currentStep = 'result';
-
-          if (this.analysisResult.readiness_score < 0.6) {
-            this.fetchRecommendations();
-          }
-
-          this.generateFinalReport();
-        }
+        this.currentStep = 'result';
+        this.fetchRecommendations();
+        this.generateFinalReport();
 
       } catch (error) {
         console.error('분석 실패:', error);
@@ -1313,30 +1518,7 @@ export default {
       }
     },
 
-    async fetchAgentQuestions() {
-      try {
-        const response = await axios.post('/api/core/job-planner/agent-questions/', {
-          missing_skills: this.analysisResult.missing_skills,
-          matched_skills: this.analysisResult.matched_skills,
-          user_profile: this.analysisResult.profile_summary
-        });
-
-        this.agentQuestions = response.data.questions || [];
-
-        // 각 질문에 대한 답변 초기화
-        this.agentAnswers = {};
-        this.agentQuestions.forEach(q => {
-          this.agentAnswers[q.id] = '';
-        });
-
-      } catch (error) {
-        console.error('질문 생성 실패:', error);
-        // 질문 생성 실패해도 계속 진행
-        this.agentQuestions = [];
-      }
-    },
-
-    async generateFinalReport(autoNavigate = false) {
+    async generateFinalReport() {
       this.isGeneratingReport = true;
       this.errorMessage = '';
 
@@ -1345,15 +1527,9 @@ export default {
           job_data: this.jobData,
           analysis_result: this.analysisResult,
           company_analysis: this.companyAnalysis,
-          agent_answers: this.agentAnswers
         });
 
         this.finalReport = response.data;
-
-        // autoNavigate가 true일 때만 자동으로 페이지 전환
-        if (autoNavigate) {
-          this.currentStep = 'result';
-        }
 
       } catch (error) {
         console.error('보고서 생성 실패:', error);
@@ -1361,12 +1537,6 @@ export default {
       } finally {
         this.isGeneratingReport = false;
       }
-    },
-
-    skipAgentQuestions() {
-      // 질문 건너뛰고 바로 최종 보고서 생성 (자동 페이지 전환)
-      this.agentAnswers = {};
-      this.generateFinalReport(true);  // autoNavigate = true
     },
 
     async fetchRecommendations() {
@@ -1385,6 +1555,10 @@ export default {
           skill_levels: completedSkillLevels,
           readiness_score: this.analysisResult.readiness_score,
           job_position: this.jobData?.position || '개발자',
+          // 원래 공고 정보 (유사도 기준 + 검색 키워드)
+          current_required_skills: this.jobData?.required_skills || [],
+          current_required_qualifications: this.jobData?.required_qualifications || '',
+          current_job_responsibilities: this.jobData?.job_responsibilities || '',
           // 현재 분석 중인 공고 정보 (중복 제거용)
           current_job_url: this.urlInput || '',
           current_job_company: this.jobData?.company_name || '',
@@ -1402,28 +1576,19 @@ export default {
       }
     },
 
-    async analyzeCompany() {
+    async analyzeCompany(url) {
       this.isAnalyzingCompany = true;
-      this.errorMessage = '';
 
       try {
-        const requestData = {
-          type: this.companyAnalysisType,
+        const response = await axios.post('/api/core/job-planner/company-analyze/', {
+          type: 'url',
+          url: url,
           company_name: this.jobData?.company_name || '회사'
-        };
-
-        if (this.companyAnalysisType === 'url') {
-          requestData.url = this.companyUrl;
-        } else {
-          requestData.text = this.companyText;
-        }
-
-        const response = await axios.post('/api/core/job-planner/company-analyze/', requestData);
+        });
         this.companyAnalysis = response.data;
 
       } catch (error) {
         console.error('기업분석 실패:', error);
-        this.errorMessage = error.response?.data?.error || '기업분석 중 오류가 발생했습니다.';
       } finally {
         this.isAnalyzingCompany = false;
       }
@@ -1441,6 +1606,38 @@ export default {
           this.skillLevels[skill] = 3;
         }
       });
+    },
+
+    removeSkill(skill) {
+      this.userSkills = this.userSkills.filter(s => s !== skill);
+      this.userSkillsInput = this.userSkills.join(', ');
+      delete this.skillLevels[skill];
+    },
+
+    addSkill() {
+      const skill = this.newSkillInput.trim();
+      if (!skill || this.userSkills.includes(skill)) return;
+      this.userSkills.push(skill);
+      this.skillLevels[skill] = 3;
+      this.userSkillsInput = this.userSkills.join(', ');
+      this.newSkillInput = '';
+    },
+
+    addTraining() {
+      const name = this.newTrainingName.trim();
+      if (!name) return;
+      this.training.push({
+        name,
+        institution: this.newTrainingInstitution.trim() || null,
+        period: this.newTrainingPeriod.trim() || null,
+      });
+      this.newTrainingName = '';
+      this.newTrainingInstitution = '';
+      this.newTrainingPeriod = '';
+    },
+
+    removeTraining(idx) {
+      this.training.splice(idx, 1);
     },
 
     parseCertifications() {
@@ -1480,12 +1677,48 @@ export default {
       this.supplementText = '';
       this.isSupplementParsing = false;
       this.analysisResult = null;
-      this.agentQuestions = [];
-      this.agentAnswers = {};
       this.finalReport = null;
       this.recommendations = [];
       this.errorMessage = '';
       this.currentStep = 'input';
+    },
+
+    async generateCoverLetterByQuestions() {
+      this.isGeneratingCoverLetter = true;
+      this.generatedCoverLetter = null;
+      const questions = this.coverLetterQuestions
+        .split('\n')
+        .map(q => q.trim())
+        .filter(q => q.length > 0);
+      try {
+        const response = await axios.post('/api/core/job-planner/generate-cover-letter-by-questions/', {
+          user_profile: this.analysisResult?.profile_summary || {},
+          job_data: this.jobData,
+          company_analysis: this.companyAnalysis,
+          questions,
+        });
+        this.generatedCoverLetter = response.data.answers;
+      } catch (error) {
+        this.errorMessage = error.response?.data?.error || '자기소개서 생성 중 오류가 발생했습니다.';
+      } finally {
+        this.isGeneratingCoverLetter = false;
+      }
+    },
+
+    async reviewPortfolio() {
+      this.isReviewingPortfolio = true;
+      this.portfolioReview = null;
+      try {
+        const response = await axios.post('/api/core/job-planner/review-portfolio/', {
+          user_profile: this.analysisResult?.profile_summary || {},
+          job_data: this.jobData,
+        });
+        this.portfolioReview = response.data;
+      } catch (error) {
+        this.errorMessage = error.response?.data?.error || '포트폴리오 분석 중 오류가 발생했습니다.';
+      } finally {
+        this.isReviewingPortfolio = false;
+      }
     },
 
     resetAll() {
@@ -1501,6 +1734,30 @@ export default {
       this.supplementText = '';
       this.isSupplementParsing = false;
 
+      // 서류 업로드 초기화
+      this.resumePdf = null;
+      this.coverLetterPdf = null;
+      this.portfolioPdf = null;
+      this.careerDescPdf = null;
+      this.resumeFileName = '';
+      this.coverLetterFileName = '';
+      this.portfolioFileName = '';
+      this.careerDescFileName = '';
+      this.isParsingDocuments = false;
+      this.documentParseSuccess = false;
+      this.parsedEmail = null;
+      this.parsedPhone = null;
+      this.parsedLanguages = [];
+      this.parsedAwards = [];
+      this.parsedStrengths = [];
+      this.parsedWorkExperience = [];
+      this.parsedKeyAchievements = [];
+      this.parsedProjects = [];
+      this.parsedGithubUrl = null;
+      this.parsedPortfolioUrl = null;
+      this.parsedTeamworkExperience = null;
+      this.parsedGrowthStory = null;
+
       // 프로필 초기화
       this.name = '';
       this.currentRole = '';
@@ -1511,21 +1768,23 @@ export default {
       this.education = '';
       this.certifications = [];
       this.certificationsInput = '';
+      this.training = [];
       this.careerGoals = '';
       this.availablePrepDays = null;
 
       // 기업분석 초기화
-      this.companyAnalysisType = 'url';
       this.companyUrl = '';
-      this.companyText = '';
       this.companyAnalysis = null;
 
       // 결과 초기화
       this.analysisResult = null;
-      this.agentQuestions = [];
-      this.agentAnswers = {};
       this.finalReport = null;
       this.recommendations = [];
+      this.coverLetterQuestions = '';
+      this.generatedCoverLetter = null;
+      this.portfolioReview = null;
+      this.isGeneratingCoverLetter = false;
+      this.isReviewingPortfolio = false;
       this.errorMessage = '';
     }
   }
@@ -1832,9 +2091,22 @@ export default {
   margin-top: 16px;
 }
 
-.job-preview-actions .btn-next {
-  margin-top: 0;
-  flex: 1;
+.step-next-row {
+  margin-top: 16px;
+}
+
+.step-next-row .btn-next {
+  width: 100%;
+}
+
+.parsing-background-notice {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: rgba(251, 191, 36, 0.1);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  color: #fbbf24;
+  font-size: 14px;
 }
 
 .btn-reset-job {
@@ -2315,6 +2587,123 @@ export default {
   border-radius: 12px;
 }
 
+.document-upload-section {
+  border-color: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.document-upload-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.upload-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.upload-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 0;
+}
+
+.upload-row .upload-btn {
+  flex: 1;
+  min-width: 0;
+}
+
+.upload-clear-btn {
+  flex-shrink: 0;
+  width: 28px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1;
+}
+
+.upload-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #f87171;
+}
+
+.upload-label {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.upload-btn {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 8px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 2px dashed rgba(148, 163, 184, 0.3);
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.upload-btn:hover {
+  border-color: rgba(99, 102, 241, 0.6);
+  color: #a5b4fc;
+}
+
+.upload-btn.uploaded {
+  border-color: rgba(34, 197, 94, 0.6);
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.btn-parse-resume {
+  width: 100%;
+  padding: 12px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.btn-parse-resume:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-parse-resume:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.parse-success-msg {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 8px;
+  color: #86efac;
+  font-size: 13px;
+}
+
 .form-section-title {
   font-size: 16px;
   font-weight: 700;
@@ -2390,11 +2779,140 @@ export default {
 
 .skill-level-item {
   display: grid;
-  grid-template-columns: 150px 1fr auto;
+  grid-template-columns: 150px 1fr auto auto;
   align-items: center;
   gap: 16px;
   padding: 12px 0;
   border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.skill-delete-btn {
+  width: 28px;
+  height: 28px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #f87171;
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.2s;
+}
+
+.skill-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #f87171;
+}
+
+.skill-add-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.skill-add-row input {
+  flex: 1;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  color: #f1f5f9;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.skill-add-row input:focus {
+  outline: none;
+  border-color: #60a5fa;
+}
+
+.skill-add-btn {
+  padding: 8px 16px;
+  background: rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 8px;
+  color: #60a5fa;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.skill-add-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+}
+
+.training-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.training-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(148, 163, 184, 0.15);
+  border-radius: 8px;
+}
+
+.training-name {
+  font-weight: 600;
+  color: #f1f5f9;
+  font-size: 14px;
+}
+
+.training-meta {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.training-meta + .training-meta::before {
+  content: '·';
+  margin-right: 4px;
+}
+
+.training-delete-btn {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 4px;
+  color: #f87171;
+  font-size: 14px;
+  cursor: pointer;
+  line-height: 1;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.training-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+}
+
+.training-add-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.training-add-row input {
+  flex: 1;
+  min-width: 120px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 8px;
+  color: #f1f5f9;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+
+.training-add-row input:focus {
+  outline: none;
+  border-color: #60a5fa;
 }
 
 .skill-level-item:last-child {
@@ -2756,6 +3274,16 @@ export default {
   color: #93c5fd;
 }
 
+.tech-blog-link {
+  color: #60a5fa;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
+.tech-blog-link:hover {
+  color: #93c5fd;
+}
+
 .growth-badge {
   padding: 4px 12px;
   background: rgba(100, 116, 139, 0.3);
@@ -2800,162 +3328,6 @@ export default {
   line-height: 1.8;
   color: #f1f5f9;
   font-weight: 500;
-}
-
-/* Agent Questions Step */
-.agent-step {
-  padding: 0;
-}
-
-.step-description {
-  font-size: 14px;
-  color: #94a3b8;
-  margin: -16px 0 24px 0;
-  line-height: 1.6;
-}
-
-/* 질문 로딩 중 */
-.loading-questions {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 60px 20px;
-  gap: 16px;
-}
-
-.loading-spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid rgba(59, 130, 246, 0.2);
-  border-top-color: #3b82f6;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.loading-text {
-  font-size: 15px;
-  color: #94a3b8;
-  font-weight: 500;
-}
-
-.agent-questions-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  margin-bottom: 32px;
-}
-
-.agent-question-item {
-  padding: 20px;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 12px;
-  border-left: 4px solid #60a5fa;
-}
-
-.question-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.question-number {
-  padding: 6px 12px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  border-radius: 6px;
-  color: white;
-  font-weight: 700;
-  font-size: 13px;
-}
-
-.question-skill {
-  padding: 6px 12px;
-  background: rgba(96, 165, 250, 0.2);
-  border: 1px solid rgba(96, 165, 250, 0.3);
-  border-radius: 6px;
-  color: #60a5fa;
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.question-text {
-  font-size: 15px;
-  color: #f1f5f9;
-  margin-bottom: 12px;
-  line-height: 1.6;
-  font-weight: 500;
-}
-
-.answer-input {
-  width: 100%;
-  padding: 12px 16px;
-  background: rgba(15, 23, 42, 0.8);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 8px;
-  color: #f1f5f9;
-  font-size: 14px;
-  font-family: inherit;
-  resize: vertical;
-  line-height: 1.6;
-  transition: all 0.2s;
-}
-
-.answer-input:focus {
-  outline: none;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.1);
-}
-
-.agent-actions {
-  display: flex;
-  gap: 16px;
-  justify-content: flex-end;
-}
-
-.btn-skip {
-  padding: 14px 32px;
-  background: rgba(100, 116, 139, 0.3);
-  border: 1px solid rgba(148, 163, 184, 0.3);
-  border-radius: 10px;
-  color: #cbd5e1;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-skip:hover {
-  background: rgba(100, 116, 139, 0.5);
-  border-color: #64748b;
-}
-
-.btn-generate-report {
-  padding: 14px 32px;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  border: none;
-  border-radius: 10px;
-  color: white;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.3s;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
-}
-
-.btn-generate-report:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(16, 185, 129, 0.5);
-}
-
-.btn-generate-report:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Final Report Styles */
@@ -3492,5 +3864,184 @@ export default {
   to {
     transform: rotate(360deg);
   }
+}
+
+/* AI 지원 도구 섹션 */
+.action-tools-section {
+  margin-top: 32px;
+  padding: 24px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.25);
+  border-radius: 12px;
+}
+
+.action-tools-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #a78bfa;
+  margin: 0 0 16px 0;
+}
+
+.action-tools-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.btn-tool {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #7c3aed, #6d28d9);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-tool:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.45);
+}
+
+.btn-tool:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* 자기소개서 문항 입력 */
+.cover-letter-questions-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(139, 92, 246, 0.2);
+}
+
+.questions-hint {
+  font-size: 12px;
+  color: #94a3b8;
+  margin: 6px 0 10px;
+}
+
+.questions-textarea {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 10px 12px;
+  resize: vertical;
+  margin-bottom: 10px;
+  font-family: inherit;
+  line-height: 1.6;
+}
+
+.questions-textarea:focus {
+  outline: none;
+  border-color: #7c3aed;
+}
+
+/* 자기소개서 결과 */
+.cover-letter-result {
+  margin-top: 20px;
+}
+
+.result-subtitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: #c4b5fd;
+  margin: 0 0 12px 0;
+}
+
+.cover-letter-item {
+  margin-bottom: 20px;
+}
+
+.cl-question {
+  font-size: 13px;
+  font-weight: 700;
+  color: #c4b5fd;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  background: rgba(124, 58, 237, 0.15);
+  border-left: 3px solid #7c3aed;
+  border-radius: 0 6px 6px 0;
+}
+
+.cover-letter-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.7;
+  color: #e2e8f0;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 0;
+}
+
+/* 포트폴리오 분석 결과 */
+.portfolio-review-result {
+  margin-top: 20px;
+}
+
+.review-section {
+  margin-bottom: 16px;
+}
+
+.review-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #a78bfa;
+  margin-bottom: 8px;
+}
+
+.review-list {
+  padding-left: 20px;
+  margin: 0;
+}
+
+.review-list li {
+  font-size: 13px;
+  color: #cbd5e1;
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.review-list.missing li {
+  color: #fca5a5;
+}
+
+.review-list.priority li {
+  color: #86efac;
+}
+
+.improvement-card {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.imp-target {
+  font-weight: 700;
+  color: #c4b5fd;
+  margin-bottom: 4px;
+}
+
+.imp-issue {
+  color: #fbbf24;
+  margin-bottom: 4px;
+}
+
+.imp-suggestion {
+  color: #86efac;
 }
 </style>
