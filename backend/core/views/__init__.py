@@ -14,14 +14,17 @@ from .ai_proxy_view import AIProxyView
 from .pseudocode.pseudocode_execution import execute_python_code
 from .pseudocode.pseudocode_agent_view import PseudocodeAgentView
 from .architecture.architecture_view import ArchitectureEvaluationView, ArchitectureQuestionGeneratorView
-from .coach.coach_view import AICoachView
+from .ai_coach.coach_view import AICoachView
 from .job_planner.job_planner_view import (
     JobPlannerParseView,
     JobPlannerAnalyzeView,
     JobPlannerCompanyAnalyzeView,
-    JobPlannerAgentQuestionsView,
     JobPlannerAgentReportView,
     JobPlannerRecommendView,
+    JobPlannerParseResumeView,
+    JobPlannerGenerateCoverLetterView,
+    JobPlannerReviewPortfolioView,
+    JobPlannerCoverLetterByQuestionsView,
 )
 # [수정일: 2026-02-26] 로그 뷰어 관리자 기능 추가
 from .admin_views import (

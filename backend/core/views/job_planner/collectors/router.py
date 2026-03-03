@@ -108,15 +108,18 @@ class CollectorRouter:
             print(f"[INFO] 사람인 URL 감지 -> SaraminCollector 우선 시도")
             collectors.append(("Saramin", self.saramin_collector))
         elif 'jobkorea.co.kr' in url_lower:
-            print(f"[INFO] 잡코리아 URL 감지 -> JobkoreaCollector 우선 시도")
+            # 잡코리아는 SSR이므로 빠른 StaticCollector 먼저 시도, 실패 시 Playwright fallback
+            print(f"[INFO] 잡코리아 URL 감지 -> StaticCollector 먼저 시도 (SSR), 실패 시 JobkoreaCollector")
+            collectors.append(("Static", self.static_collector))
             collectors.append(("Jobkorea", self.jobkorea_collector))
         elif 'wanted.co.kr' in url_lower:
             is_spa = True
             print(f"[INFO] 원티드 URL 감지 (SPA) -> WantedCollector 우선 시도, StaticCollector 제외")
             collectors.append(("Wanted", self.wanted_collector))
 
-        # SPA 사이트는 StaticCollector 제외 (정적 HTML에 본문 없음)
-        if not is_spa:
+        # SPA 사이트 및 잡코리아(이미 앞에 추가됨)는 StaticCollector 중복 추가 제외
+        already_has_static = any(name == "Static" for name, _ in collectors)
+        if not is_spa and not already_has_static:
             collectors.append(("Static", self.static_collector))
         collectors.append(("Browser", self.browser_collector))
 

@@ -75,9 +75,6 @@ class JobkoreaCollector(BaseCollector):
                 except PlaywrightTimeout:
                     print(f"[WARN] 잡코리아 콘텐츠 영역 대기 실패, 전체 본문 추출 시도...")
 
-                # 추가 렌더링 대기 (React 컴포넌트 로딩)
-                page.wait_for_timeout(2000)
-
                 # 4. 잡코리아 본문 추출 (최적화된 셀렉터)
                 selectors_to_try = [
                     'article',                # Next.js 메인 콘텐츠

@@ -78,7 +78,10 @@
 
           <!-- 파싱 결과 미리보기 -->
           <div v-if="jobData" class="job-preview">
-            <h4>파싱 완료</h4>
+            <div class="job-preview-header">
+              <h4>파싱 완료</h4>
+              <button class="btn-reset-parse" @click="resetParsing" title="새 공고 입력">↺ 초기화</button>
+            </div>
             <div class="preview-grid">
               <div class="preview-item">
                 <span class="preview-label">회사</span>
@@ -337,6 +340,17 @@ function handleImageUpload(event) {
 function removeImage(index) {
   imageFiles.value.splice(index, 1);
   imagePreviews.value.splice(index, 1);
+}
+
+// ── 파싱 초기화 ────────────────────────────────────────────
+function resetParsing() {
+  jobData.value = null;
+  urlInput.value = '';
+  urlParsed.value = false;
+  dataCompleteness.value = null;
+  imageFiles.value = [];
+  imagePreviews.value = [];
+  textInput.value = '';
 }
 
 // ── URL 파싱 ───────────────────────────────────────────────
@@ -801,11 +815,36 @@ async function onStart() {
   padding: 14px 16px;
 }
 
+.job-preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
 .job-preview h4 {
   font-size: 12px;
   font-weight: 700;
   color: #a5b4fc;
-  margin: 0 0 10px;
+  margin: 0;
+}
+
+.btn-reset-parse {
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-reset-parse:hover {
+  border-color: rgba(239, 68, 68, 0.5);
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .preview-grid { display: flex; flex-direction: column; gap: 5px; margin-bottom: 8px; }

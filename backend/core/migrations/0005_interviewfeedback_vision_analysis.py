@@ -5,7 +5,6 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0004_add_interview_models'),
-        ('core', '0004_alter_common_create_date_alter_common_create_id_and_more'),
     ]
 
     operations = [

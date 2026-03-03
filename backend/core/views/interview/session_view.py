@@ -1,8 +1,15 @@
 """
-session_view.py — 모의면접 세션 CRUD API
-POST /api/core/interview/sessions/           → 새 세션 생성 (첫 질문 포함)
-GET  /api/core/interview/sessions/           → 세션 목록
-GET  /api/core/interview/sessions/<pk>/      → 세션 상세
+session_view.py -- 모의면접 세션 CRUD API
+
+수정일: 2026-03-01
+설명:
+  POST /api/core/interview/sessions/           -> 새 세션 생성 (첫 질문 포함)
+  GET  /api/core/interview/sessions/           -> 세션 목록
+  GET  /api/core/interview/sessions/<pk>/      -> 세션 상세
+
+[2026-03-01 변경사항]
+  - 세션 생성 시 question_bank_service에서 슬롯별 기출 질문을 가져와
+    interview_plan["bank_questions"]에 저장. humanizer -> interviewer로 전달됨.
 """
 import json
 from django.utils import timezone
@@ -23,6 +30,8 @@ from core.services.interview.state_engine import StateEngine
 from core.services.interview.planner import decide_intent
 from core.services.interview.humanizer import build_context
 from core.services.interview.interviewer import generate_question_sync
+# [2026-03-01] 면접 질문 뱅크 서비스 추가
+from core.services.interview.question_bank_service import get_questions_for_session
 
 engine = StateEngine()
 
@@ -104,17 +113,60 @@ class InterviewSessionView(APIView):
             try:
                 job_posting = SavedJobPosting.objects.get(pk=job_posting_id, user=user)
             except SavedJobPosting.DoesNotExist:
+                # [수정일: 2026-03-01]
+                # 수정내용: 채용공고 조회가 실패(없는 ID 이거나 권한 없음)할 경우, 
+                # 라우팅 오류(404 Not Found)와 혼동되지 않도록 400 Bad Request를 반환하고 
+                # 명시적인 에러 메시지를 제공하도록 수정함.
                 return Response(
-                    {'error': '채용공고를 찾을 수 없습니다.'},
-                    status=status.HTTP_404_NOT_FOUND
+                    {'error': f'채용공고(ID: {job_posting_id})를 찾을 수 없습니다. (삭제되었거나 내 공고가 아님)'},
+                    status=status.HTTP_400_BAD_REQUEST
                 )
 
         try:
             # 1. 사용자 취약점 분석
             user_weakness = analyze_user_weakness(user)
 
+            # 1-1. 유저 프로필의 직무 역할 조회
+            user_job_roles = []
+            try:
+                detail = user.user_detail
+                user_job_roles = detail.job_role if isinstance(detail.job_role, list) else []
+            except Exception:
+                pass
+
             # 2. 면접 계획 생성
-            interview_plan = generate_plan(job_posting, user_weakness)
+            interview_plan = generate_plan(job_posting, user_weakness, user_job_roles)
+
+            # 2-1. [2026-03-01] DB에서 슬롯별 기출 질문을 가져와 interview_plan에 저장
+            #      humanizer -> interviewer로 전달되어 기출 기반 면접 진행
+            try:
+                slot_types = [s["slot"] for s in interview_plan.get("slots", [])]
+                company = job_posting.company_name if job_posting else ""
+                job = job_posting.position if job_posting else ""
+                print(f"\n{'='*60}")
+                print(f"[기출 질문 조회] 기업: '{company}' | 직무: '{job}'")
+                print(f"[기출 질문 조회] 슬롯: {slot_types}")
+                bank_questions = get_questions_for_session(
+                    company=company, job=job, slot_types=slot_types
+                )
+                interview_plan["bank_questions"] = bank_questions
+                total = sum(len(qs) for qs in bank_questions.values())
+                if total > 0:
+                    print(f"[기출 질문 조회] ✅ 총 {total}개 기출 질문 로드 완료")
+                    for slot_key, qs in bank_questions.items():
+                        if qs:
+                            print(f"  - {slot_key}: {len(qs)}개")
+                            for q in qs[:3]:
+                                print(f"    · {q.get('question_text', '')[:60]}")
+                else:
+                    print(f"[기출 질문 조회] ⚠️ 기출 질문 없음 (DB에 해당 기업/직무 데이터 없음)")
+                print(f"{'='*60}\n")
+            except Exception as e:
+                print(f"[SessionView] 기출 질문 로드 실패 (무시): {e}")
+                interview_plan["bank_questions"] = {}
+
+            # 2-2. 유저 직무 정보를 interview_plan에 저장 (humanizer에서 참조)
+            interview_plan["user_job_roles"] = user_job_roles
 
             # 3. 세션 생성
             session = InterviewSession.objects.create(
@@ -251,6 +303,7 @@ class InterviewSessionDetailView(APIView):
                     'recommendation': fb.recommendation,
                     'slot_summary': fb.slot_summary,
                     'vision_analysis': fb.vision_analysis,
+                    'vision_analysis': fb.vision_analysis,
                 }
             except InterviewFeedback.DoesNotExist:
                 serialized['feedback'] = None
@@ -270,6 +323,36 @@ class InterviewSessionDetailView(APIView):
 
         session.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@method_decorator(csrf_exempt, name='dispatch')
+class InterviewVisionView(APIView):
+    """PATCH /api/core/interview/sessions/<pk>/vision/ — 비전 분석 결과 저장"""
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def patch(self, request, pk):
+        user = _get_user(request)
+        if not user:
+            return Response({'error': '로그인이 필요합니다.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            session = InterviewSession.objects.get(pk=pk, user=user, status='completed')
+        except InterviewSession.DoesNotExist:
+            return Response({'error': '완료된 세션을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            fb = session.feedback
+        except InterviewFeedback.DoesNotExist:
+            return Response({'error': '피드백을 찾을 수 없습니다.'}, status=status.HTTP_404_NOT_FOUND)
+
+        vision_data = request.data.get('vision_analysis')
+        if vision_data is None:
+            return Response({'error': 'vision_analysis 데이터가 없습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        fb.vision_analysis = vision_data
+        fb.save(update_fields=['vision_analysis'])
+        return Response({'ok': True}, status=status.HTTP_200_OK)
 
 
 @method_decorator(csrf_exempt, name='dispatch')

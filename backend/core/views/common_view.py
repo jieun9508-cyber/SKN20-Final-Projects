@@ -17,7 +17,7 @@ class CommonViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = CommonSerializer
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = super().get_queryset().filter(use_yn='Y')
         top_code = self.request.query_params.get('top_code')
         if top_code:
             queryset = queryset.filter(top_code=top_code)

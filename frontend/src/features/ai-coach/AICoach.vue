@@ -1,7 +1,64 @@
 <template>
   <div class="coach-container">
+    <!-- 사이드바 오버레이 -->
+    <div v-if="sidebarOpen" class="sidebar-overlay" @click="sidebarOpen = false"></div>
+
+    <!-- 대화 목록 사이드바 -->
+    <aside class="sidebar" :class="{ open: sidebarOpen }">
+      <div class="sidebar-header">
+        <span class="sidebar-title">대화 목록</span>
+        <button class="sidebar-close" @click="sidebarOpen = false">&times;</button>
+      </div>
+      <button class="sidebar-new-btn" @click="startNewConversation">+ 새 대화</button>
+      <div class="sidebar-list">
+        <div
+          v-for="conv in conversations"
+          :key="conv.id"
+          class="sidebar-item"
+          :class="{ active: conv.id === conversationId }"
+          @click="selectConversation(conv.id)"
+        >
+          <!-- 이름 수정 모드 -->
+          <template v-if="editingConvId === conv.id">
+            <input
+              class="sidebar-edit-input"
+              v-model="editingTitle"
+              @keyup.enter="confirmRename(conv.id)"
+              @keyup.escape="cancelRename"
+              @click.stop
+              ref="renameInput"
+              maxlength="100"
+            />
+            <div class="sidebar-edit-actions" @click.stop>
+              <button class="edit-confirm" @click="confirmRename(conv.id)">&#10003;</button>
+              <button class="edit-cancel" @click="cancelRename">&#10005;</button>
+            </div>
+          </template>
+          <!-- 일반 모드 -->
+          <template v-else>
+            <span class="sidebar-item-title">{{ conv.title || '새 대화' }}</span>
+            <span class="sidebar-item-date">{{ formatDate(conv.create_date) }}</span>
+            <button class="sidebar-menu-btn" @click.stop="toggleMenu(conv.id)">&#8943;</button>
+          </template>
+          <!-- 드롭다운 메뉴 -->
+          <div v-if="menuOpenId === conv.id" class="sidebar-dropdown" @click.stop>
+            <button class="dropdown-item" @click.stop="startRename(conv)">
+              <span class="dropdown-icon">&#9998;</span> 이름 수정
+            </button>
+            <button class="dropdown-item dropdown-danger" @click.stop="deleteConversation(conv.id)">
+              <span class="dropdown-icon">&#128465;</span> 삭제
+            </button>
+          </div>
+        </div>
+        <div v-if="conversations.length === 0" class="sidebar-empty">
+          아직 대화가 없습니다
+        </div>
+      </div>
+    </aside>
+
     <header class="coach-header">
-      <button class="back-btn" @click="$emit('close')">&times;</button>
+      <button class="header-icon-btn" @click="sidebarOpen = !sidebarOpen" title="대화 목록">&#9776;</button>
+      <button class="header-icon-btn right" @click="$emit('close')" title="닫기">&times;</button>
       <div class="badge">AI COACH</div>
       <h1 class="title">Coduck Coach</h1>
       <p class="subtitle">AI 학습 코치가 당신의 성장을 도와드립니다</p>
@@ -153,7 +210,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
+import { ref, nextTick, onMounted, onUnmounted } from 'vue';
 import Chart from 'chart.js/auto';
 
 const emit = defineEmits(['close']);
@@ -163,6 +220,14 @@ const inputText = ref('');
 const loading = ref(false);
 const streaming = ref(false);
 const chatArea = ref(null);
+const conversationId = ref(null);
+const historyLoaded = ref(false);
+const sidebarOpen = ref(false);
+const conversations = ref([]);
+const menuOpenId = ref(null);
+const editingConvId = ref(null);
+const editingTitle = ref('');
+const renameInput = ref(null);
 
 function getCsrfToken() {
   const m = document.cookie.match(/csrftoken=([^;]+)/);
@@ -257,6 +322,189 @@ function scrollToBottom() {
   });
 }
 
+// ── onMounted: 대화 목록 + active 대화 복원 ──
+onMounted(async () => {
+  try {
+    const resp = await fetch('/api/core/ai-coach/conversations/', {
+      headers: { 'X-CSRFToken': getCsrfToken() },
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+
+    // 대화 목록만 로드 (프리셋 버튼이 보이는 초기 화면 유지)
+    conversations.value = data.conversations || [];
+  } catch (e) {
+    // 히스토리 로드 실패해도 무시 — 새 대화로 시작
+  } finally {
+    historyLoaded.value = true;
+  }
+
+  // 메뉴 바깥 클릭 시 닫기
+  document.addEventListener('click', handleGlobalClick);
+});
+
+function handleGlobalClick() {
+  menuOpenId.value = null;
+}
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleGlobalClick);
+  // 차트 인스턴스 정리 (메모리 릭 방지)
+  chartInstances.forEach(c => c.destroy());
+  chartInstances.clear();
+});
+
+function restoreMessages(msgList) {
+  messages.value = [];
+  for (const msg of msgList) {
+    if (msg.role === 'user') {
+      messages.value.push({ role: 'user', content: msg.content });
+    } else if (msg.role === 'assistant') {
+      messages.value.push({
+        role: 'assistant',
+        content: msg.content,
+        timeline: [],
+        showAnswer: true,
+        displayedContent: msg.content,
+        intentData: null,
+        charts: [],
+      });
+    }
+  }
+}
+
+async function selectConversation(id) {
+  if (loading.value || id === conversationId.value) {
+    sidebarOpen.value = false;
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/core/ai-coach/conversations/${id}/`, {
+      headers: { 'X-CSRFToken': getCsrfToken() },
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    conversationId.value = data.conversation.id;
+    // 차트 정리
+    chartInstances.forEach(c => c.destroy());
+    chartInstances.clear();
+    // 메시지 복원
+    restoreMessages(data.conversation.messages);
+    scrollToBottom();
+  } catch (e) { /* ignore */ }
+  sidebarOpen.value = false;
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const d = new Date(dateStr);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return '방금';
+  if (diffMin < 60) return `${diffMin}분 전`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}시간 전`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}일 전`;
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
+
+async function startNewConversation() {
+  if (loading.value) return;
+  try {
+    await fetch('/api/core/ai-coach/conversations/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+    });
+    // 대화 목록 갱신 (기존 active → closed 반영)
+    await refreshConversationList();
+  } catch (e) { /* ignore */ }
+  conversationId.value = null;
+  messages.value = [];
+  // 기존 차트 인스턴스 정리
+  chartInstances.forEach(c => c.destroy());
+  chartInstances.clear();
+  sidebarOpen.value = false;
+}
+
+async function refreshConversationList() {
+  try {
+    const resp = await fetch('/api/core/ai-coach/conversations/', {
+      headers: { 'X-CSRFToken': getCsrfToken() },
+    });
+    if (!resp.ok) return;
+    const data = await resp.json();
+    conversations.value = data.conversations || [];
+  } catch (e) { /* ignore */ }
+}
+
+function toggleMenu(convId) {
+  menuOpenId.value = menuOpenId.value === convId ? null : convId;
+}
+
+function closeMenu() {
+  menuOpenId.value = null;
+}
+
+function startRename(conv) {
+  menuOpenId.value = null;
+  editingConvId.value = conv.id;
+  editingTitle.value = conv.title || '';
+  nextTick(() => {
+    const input = document.querySelector('.sidebar-edit-input');
+    if (input) { input.focus(); input.select(); }
+  });
+}
+
+function cancelRename() {
+  editingConvId.value = null;
+  editingTitle.value = '';
+}
+
+async function confirmRename(convId) {
+  const title = editingTitle.value.trim();
+  if (!title) { cancelRename(); return; }
+  try {
+    const resp = await fetch(`/api/core/ai-coach/conversations/${convId}/`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': getCsrfToken(),
+      },
+      body: JSON.stringify({ title }),
+    });
+    if (resp.ok) {
+      const conv = conversations.value.find(c => c.id === convId);
+      if (conv) conv.title = title;
+    }
+  } catch (e) { /* ignore */ }
+  cancelRename();
+}
+
+async function deleteConversation(convId) {
+  menuOpenId.value = null;
+  try {
+    const resp = await fetch(`/api/core/ai-coach/conversations/${convId}/`, {
+      method: 'DELETE',
+      headers: { 'X-CSRFToken': getCsrfToken() },
+    });
+    if (resp.ok) {
+      conversations.value = conversations.value.filter(c => c.id !== convId);
+      // 현재 보고 있던 대화가 삭제된 경우 → 초기화
+      if (conversationId.value === convId) {
+        conversationId.value = null;
+        messages.value = [];
+        chartInstances.forEach(c => c.destroy());
+        chartInstances.clear();
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
 function sendPreset(text) {
   inputText.value = text;
   sendMessage();
@@ -293,7 +541,7 @@ async function sendMessage() {
         'Content-Type': 'application/json',
         'X-CSRFToken': getCsrfToken(),
       },
-      body: JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text, conversation_id: conversationId.value }),
     });
 
     if (!response.ok || !response.body) {
@@ -332,8 +580,13 @@ async function sendMessage() {
             const data = JSON.parse(payload);
             streaming.value = true;
 
+            // [2026-03-01] Conversation ID
+            if (data.type === 'conversation_id') {
+              conversationId.value = data.conversation_id;
+              refreshConversationList();
+            }
             // [2026-02-24] Intent Detected (v2, v3)
-            if (data.type === 'intent_detected') {
+            else if (data.type === 'intent_detected') {
               assistantMsg.intentData = {
                 intent_name: data.intent_name,
                 confidence: data.confidence,
@@ -563,6 +816,249 @@ function buildChartConfig(chartData) {
   z-index: 1000;
 }
 
+/* ===== Sidebar ===== */
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1100;
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 280px;
+  height: 100vh;
+  background: var(--dark);
+  border-right: 1px solid var(--glass-border);
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.sidebar.open {
+  transform: translateX(0);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--glass-border);
+  flex-shrink: 0;
+}
+
+.sidebar-title {
+  font-weight: 700;
+  font-size: 1rem;
+  color: #f8fafc;
+}
+
+.sidebar-close {
+  background: none;
+  border: none;
+  color: #64748b;
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+.sidebar-close:hover {
+  color: #f8fafc;
+}
+
+.sidebar-new-btn {
+  margin: 0.75rem 1rem;
+  padding: 0.6rem 1rem;
+  background: var(--glass);
+  border: 1px dashed var(--glass-border);
+  border-radius: 8px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: 'Outfit', sans-serif;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+.sidebar-new-btn:hover {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: var(--primary);
+  color: #f8fafc;
+}
+
+.sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.25rem 0.75rem;
+}
+.sidebar-list::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar-list::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+}
+
+.sidebar-item {
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.sidebar-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.sidebar-item.active {
+  background: rgba(99, 102, 241, 0.15);
+  border-left: 3px solid var(--primary);
+}
+
+.sidebar-item-title {
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+
+.sidebar-item-date {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.sidebar-empty {
+  padding: 2rem 1rem;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+/* ===== Sidebar Item Menu ===== */
+.sidebar-item {
+  position: relative;
+}
+
+.sidebar-menu-btn {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: transparent;
+  font-size: 1.1rem;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  line-height: 1;
+}
+.sidebar-item:hover .sidebar-menu-btn {
+  color: var(--text-muted);
+}
+.sidebar-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc !important;
+}
+
+.sidebar-dropdown {
+  position: absolute;
+  right: 6px;
+  top: 100%;
+  background: var(--dark-light);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 4px;
+  z-index: 10;
+  min-width: 120px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 0.8rem;
+  font-family: 'Outfit', sans-serif;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.dropdown-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.dropdown-item.dropdown-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.dropdown-icon {
+  font-size: 0.85rem;
+  width: 18px;
+  text-align: center;
+}
+
+/* ===== Inline Rename ===== */
+.sidebar-edit-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--primary);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  color: #f8fafc;
+  font-size: 0.85rem;
+  font-family: 'Outfit', sans-serif;
+  outline: none;
+}
+
+.sidebar-edit-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.edit-confirm,
+.edit-cancel {
+  background: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.edit-confirm {
+  color: #4ade80;
+}
+.edit-confirm:hover {
+  background: rgba(74, 222, 128, 0.15);
+  border-color: #4ade80;
+}
+.edit-cancel {
+  color: var(--text-muted);
+}
+.edit-cancel:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
 /* ===== Header (MyRecordsView 패턴) ===== */
 .coach-header {
   text-align: center;
@@ -571,20 +1067,32 @@ function buildChartConfig(chartData) {
   flex-shrink: 0;
 }
 
-.back-btn {
+.header-icon-btn {
   position: absolute;
   top: 1rem;
-  right: 0;
-  background: none;
-  border: none;
-  color: #64748b;
-  font-size: 2.5rem;
+  left: 1.5rem;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  font-size: 1.2rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
   line-height: 1;
-  transition: color 0.2s;
 }
-.back-btn:hover {
+.header-icon-btn:hover {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--primary);
   color: #f8fafc;
+}
+.header-icon-btn.right {
+  left: auto;
+  right: 1.5rem;
 }
 
 .badge {

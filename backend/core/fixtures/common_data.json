@@ -5,10 +5,10 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "frontend",
-            "code_name": "Frontend Engineer",
+            "code_name": "프론트엔드 개발자",
             "order_number": 10,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -20,10 +20,25 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "backend",
-            "code_name": "Backend Engineer",
+            "code_name": "백엔드 개발자",
             "order_number": 20,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
+            "create_id": null,
+            "update_id": null,
+            "use_yn": "Y"
+        }
+    },
+    {
+        "model": "core.common",
+        "pk": 18,
+        "fields": {
+            "top_code": "JOB_ROLE",
+            "code_id": "server",
+            "code_name": "서버 개발자",
+            "order_number": 25,
+            "create_date": "2026-03-01T00:00:00.000Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -35,10 +50,10 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "fullstack",
-            "code_name": "Fullstack Engineer",
+            "code_name": "풀스택 개발자",
             "order_number": 30,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -50,10 +65,10 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "devops",
-            "code_name": "DevOps / SRE",
+            "code_name": "DevOps / 시스템 관리자",
             "order_number": 40,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -65,10 +80,40 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "ai",
-            "code_name": "AI / ML Engineer",
+            "code_name": "AI / ML 엔지니어",
             "order_number": 50,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
+            "create_id": null,
+            "update_id": null,
+            "use_yn": "Y"
+        }
+    },
+    {
+        "model": "core.common",
+        "pk": 19,
+        "fields": {
+            "top_code": "JOB_ROLE",
+            "code_id": "data_scientist",
+            "code_name": "데이터 사이언티스트",
+            "order_number": 55,
+            "create_date": "2026-03-01T00:00:00.000Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
+            "create_id": null,
+            "update_id": null,
+            "use_yn": "Y"
+        }
+    },
+    {
+        "model": "core.common",
+        "pk": 20,
+        "fields": {
+            "top_code": "JOB_ROLE",
+            "code_id": "mlops",
+            "code_name": "MLOps 엔지니어",
+            "order_number": 58,
+            "create_date": "2026-03-01T00:00:00.000Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -80,10 +125,10 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "mobile",
-            "code_name": "Mobile App Engineer",
+            "code_name": "모바일 앱 개발자",
             "order_number": 60,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -95,10 +140,10 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "data",
-            "code_name": "Data Engineer",
+            "code_name": "데이터 엔지니어",
             "order_number": 70,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -110,10 +155,10 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "security",
-            "code_name": "Security Engineer",
+            "code_name": "보안 엔지니어",
             "order_number": 80,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -125,10 +170,10 @@
         "fields": {
             "top_code": "JOB_ROLE",
             "code_id": "etc",
-            "code_name": "ETC",
-            "order_number": 90,
+            "code_name": "기타",
+            "order_number": 99,
             "create_date": "2026-01-20T21:24:08.137Z",
-            "update_date": "2026-01-20T21:24:08.137Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -140,10 +185,40 @@
         "fields": {
             "top_code": "IT_INTEREST",
             "code_id": "ai",
-            "code_name": "Artificial Intelligence",
+            "code_name": "인공지능 일반",
             "order_number": 10,
             "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
+            "create_id": null,
+            "update_id": null,
+            "use_yn": "Y"
+        }
+    },
+    {
+        "model": "core.common",
+        "pk": 21,
+        "fields": {
+            "top_code": "IT_INTEREST",
+            "code_id": "nlp",
+            "code_name": "자연어처리 / LLM",
+            "order_number": 15,
+            "create_date": "2026-03-01T00:00:00.000Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
+            "create_id": null,
+            "update_id": null,
+            "use_yn": "Y"
+        }
+    },
+    {
+        "model": "core.common",
+        "pk": 22,
+        "fields": {
+            "top_code": "IT_INTEREST",
+            "code_id": "cv",
+            "code_name": "컴퓨터 비전",
+            "order_number": 18,
+            "create_date": "2026-03-01T00:00:00.000Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -155,10 +230,10 @@
         "fields": {
             "top_code": "IT_INTEREST",
             "code_id": "web",
-            "code_name": "Web Development",
+            "code_name": "웹 개발",
             "order_number": 20,
             "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -170,10 +245,25 @@
         "fields": {
             "top_code": "IT_INTEREST",
             "code_id": "data",
-            "code_name": "Data Science",
+            "code_name": "데이터 사이언스",
             "order_number": 30,
             "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
+            "create_id": null,
+            "update_id": null,
+            "use_yn": "Y"
+        }
+    },
+    {
+        "model": "core.common",
+        "pk": 23,
+        "fields": {
+            "top_code": "IT_INTEREST",
+            "code_id": "mlops",
+            "code_name": "MLOps / ML 시스템",
+            "order_number": 35,
+            "create_date": "2026-03-01T00:00:00.000Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -185,10 +275,25 @@
         "fields": {
             "top_code": "IT_INTEREST",
             "code_id": "cloud",
-            "code_name": "Cloud Computing",
+            "code_name": "클라우드 / 인프라",
             "order_number": 40,
             "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
+            "create_id": null,
+            "update_id": null,
+            "use_yn": "Y"
+        }
+    },
+    {
+        "model": "core.common",
+        "pk": 17,
+        "fields": {
+            "top_code": "IT_INTEREST",
+            "code_id": "mobile",
+            "code_name": "모바일 앱",
+            "order_number": 50,
+            "create_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
             "use_yn": "Y"
@@ -201,12 +306,12 @@
             "top_code": "IT_INTEREST",
             "code_id": "blockchain",
             "code_name": "Blockchain",
-            "order_number": 50,
+            "order_number": 90,
             "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
-            "use_yn": "Y"
+            "use_yn": "N"
         }
     },
     {
@@ -216,12 +321,12 @@
             "top_code": "IT_INTEREST",
             "code_id": "iot",
             "code_name": "IoT",
-            "order_number": 60,
+            "order_number": 91,
             "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
-            "use_yn": "Y"
+            "use_yn": "N"
         }
     },
     {
@@ -231,27 +336,12 @@
             "top_code": "IT_INTEREST",
             "code_id": "game",
             "code_name": "Game Development",
-            "order_number": 70,
+            "order_number": 92,
             "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
+            "update_date": "2026-03-01T00:00:00.000Z",
             "create_id": null,
             "update_id": null,
-            "use_yn": "Y"
-        }
-    },
-    {
-        "model": "core.common",
-        "pk": 17,
-        "fields": {
-            "top_code": "IT_INTEREST",
-            "code_id": "mobile",
-            "code_name": "Mobile Application",
-            "order_number": 80,
-            "create_date": "2026-01-20T21:24:08.140Z",
-            "update_date": "2026-01-20T21:24:08.140Z",
-            "create_id": null,
-            "update_id": null,
-            "use_yn": "Y"
+            "use_yn": "N"
         }
     }
 ]

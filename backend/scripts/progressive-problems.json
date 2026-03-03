@@ -2,6 +2,7 @@
   "progressiveProblems": [
     {
       "id": "S1",
+      "title": "Python 기초 버그 수정",
       "source_id": "PY_BASICS_1",
       "mode": "tutorial",
       "scenario": "신입 개발자가 작성한 Python 스크립트 5개에서 버그 리포트가 들어왔습니다. 에러 로그를 분석하고 올바른 수정안을 선택하세요.",
@@ -293,6 +294,7 @@
     },
     {
       "id": "S2",
+      "title": "QA 티켓 해결하기",
       "source_id": "PY_MIX_1",
       "mode": "guided",
       "scenario": "QA팀에서 버그 티켓 5건이 넘어왔습니다. Python 로직 오류부터 PyTorch 추론 설정 실수까지, 빈칸에 정확한 코드를 채워 이슈를 클로즈하세요.",
@@ -457,6 +459,7 @@
     },
     {
       "id": "S3",
+      "title": "코드 리뷰 버그 수정",
       "source_id": "PYTORCH_BRIDGE_1",
       "mode": "line_edit",
       "scenario": "코드 리뷰에서 버그가 발견된 파일 5개가 할당되었습니다. 틀린 줄을 정확히 찾아 클릭하고 직접 수정하세요.",
@@ -629,6 +632,7 @@
     },
     {
       "id": "S4",
+      "title": "PyTorch 학습 루프 디버깅",
       "scenario": "이제부터 실전입니다. PyTorch 학습 루프에서 현업 개발자도 자주 겪는 핵심 버그 3건을 자유 코딩으로 해결하세요.",
       "difficulty": 2,
       "totalSteps": 3,
@@ -760,6 +764,7 @@
     },
     {
       "id": "S5",
+      "title": "데이터 파이프라인 최적화",
       "scenario": "데이터 파이프라인을 구축했는데, 학습 속도가 너무 느리거나, 예상치 못한 에러가 발생하거나, 재현이 안 되는 문제가 생깁니다.",
       "difficulty": 2,
       "totalSteps": 3,
@@ -865,6 +870,7 @@
     },
     {
       "id": "S6",
+      "title": "모델 저장/로드 문제 해결",
       "scenario": "학습이 완료된 모델을 저장하고 나중에 다시 불러왔는데, 성능이 다르거나 에러가 발생합니다.",
       "difficulty": 3,
       "totalSteps": 3,
@@ -941,7 +947,7 @@
           "buggy_code": "import torch\n\n# GPU 서버에서 저장\nmodel = MyModel().cuda()\ntorch.save(model.state_dict(), 'model.pth')\n\n# CPU 서버에서 로드 (에러!)\nmodel = MyModel()\nmodel.load_state_dict(torch.load('model.pth'))\nmodel.eval()",
           "correct_code": "import torch\n\n# GPU 서버에서 저장\nmodel = MyModel().cuda()\ntorch.save(model.state_dict(), 'model.pth')\n\n# CPU 서버에서 로드\ndevice = torch.device('cuda' if torch.cuda.is_available() else 'cpu')\nmodel = MyModel()\nmodel.load_state_dict(torch.load('model.pth', map_location=device))\nmodel.to(device)\nmodel.eval()",
           "error_log": "=== 배포 서버에서 모델 로드 ===\nServer: CPU-only (AWS t3.medium)\nModel saved on: GPU server (NVIDIA A100)\n\n>>> model.load_state_dict(torch.load('model.pth'))\nRuntimeError: Attempting to deserialize object on a CUDA device\nbut torch.cuda.is_available() is False.\n\n[ENV] 학습 서버: cuda:0 → 배포 서버: cpu only",
-          "success_log": ">>> model.load_state_dict(torch.load('model.pth', map_location=device))\n<All keys matched successfully>\n# 추론 정상 동작",
+          "success_log": "model.load_state_dict(torch.load('model.pth', map_location=device))\n<All keys matched successfully>\n# 추론 정상 동작",
           "hint": "모델을 저장할 때 텐서가 어떤 디바이스에 있었는지도 함께 저장됩니다. 다른 환경에서 로드할 때 이 정보를 어떻게 처리할 수 있을까요?",
           "debugging_guide": "에러 메시지를 자세히 읽어보세요. PyTorch가 해결책을 알려주고 있습니다.",
           "solution_check": {
@@ -961,7 +967,6 @@
             "application_concepts": ["GPU 학습 → CPU 서빙 파이프라인", "map_location='cpu' 패턴"],
             "first_question": "map_location을 추가하셨는데, 이게 없으면 CPU 환경에서 왜 에러가 나는 건가요?"
           },
-          "verification_code": "import torch\nimport torch.nn as nn\nimport json\nimport tempfile, os\n\nmodel = nn.Linear(10, 2)\ntmp = tempfile.NamedTemporaryFile(suffix='.pth', delete=False)\ntorch.save(model.state_dict(), tmp.name)\ntmp.close()\n\n__USER_CODE__\n\nresult = {'passed': False, 'message': ''}\ntry:\n    # map_location이 사용되었는지 확인 (코드 문자열 검사는 solution_check에서)\n    # 여기서는 실제 로드 가능 여부 확인\n    loaded = torch.load(tmp.name, map_location='cpu', weights_only=True)\n    new_model = nn.Linear(10, 2)\n    new_model.load_state_dict(loaded)\n    output = new_model(torch.randn(1, 10))\n    if output.shape == (1, 2):\n        result['verified'] = True\n        result['message'] = 'PASS: map_location을 사용하여 CPU에서 정상 로드됩니다'\n    else:\n        result['message'] = 'FAIL: 로드 후 추론 결과가 비정상입니다'\n    os.unlink(tmp.name)\nexcept Exception as e:\n    result['message'] = f'ERROR: {str(e)}'\n    os.unlink(tmp.name)\nprint(json.dumps(result))",
           "fix_mode": "free_code"
         }
       ],
@@ -971,6 +976,7 @@
     },
     {
       "id": "S7",
+      "title": "Transformer Fine-tuning 버그헌트",
       "scenario": "Transformer 기반 모델(BERT, GPT 등)을 Fine-tuning하거나 추론하는데, 예상과 다른 결과가 나오거나 에러가 발생합니다.",
       "difficulty": 3,
       "totalSteps": 3,

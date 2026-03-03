@@ -22,9 +22,16 @@ from core.views import (
     JobPlannerParseView,
     JobPlannerAnalyzeView,
     JobPlannerCompanyAnalyzeView,
-    JobPlannerAgentQuestionsView,
     JobPlannerAgentReportView,
     JobPlannerRecommendView,
+    JobPlannerParseResumeView,
+    JobPlannerGenerateCoverLetterView,
+    JobPlannerReviewPortfolioView,
+    JobPlannerCoverLetterByQuestionsView,
+    CoduckWarsAnalyzeCodeView,
+    CoduckWarsStartView,
+    CoduckWarsPressureView,
+    CoduckWarsEvaluationView,
     AdminLoginView,
     AdminLogView,
     AdminLogSaveView,
@@ -36,6 +43,7 @@ from core.views.pseudocode.pseudocode_execution import execute_python_code
 from core.views.pseudocode import pseudocode_evaluation
 from core.views import youtube_recommendation
 from core.views.architecture.architecture_view import ArchitectureEvaluationView, ArchitectureQuestionGeneratorView
+from core.views.ai_coach.coach_view import AICoachView, CoachConversationView, CoachConversationDetailView
 from core.views.wars.wars_mission_view import WarsMissionsView
 from core.views.coach.coach_view import AICoachView
 from core.views.interview import (
@@ -44,6 +52,7 @@ from core.views.interview import (
     InterviewSessionView, InterviewSessionDetailView, InterviewAnswerView,
     STTTranscribeView,
     TTSSynthesizeView,
+    InterviewQuestionSearchView,    # 2026-03-01 면접 질문 뱅크 검색 API 추가
 )
 
 router = DefaultRouter()
@@ -101,6 +110,8 @@ urlpatterns = [
     # 10. AI Coach Agent API
     path('ai-coach/chat/', AICoachView.as_view(), name='ai_coach_chat'),
     path('ai-coach/chart-details/', AICoachView.as_view(), name='ai_coach_chart_details'),
+    path('ai-coach/conversations/', CoachConversationView.as_view(), name='ai_coach_conversations'),
+    path('ai-coach/conversations/<int:pk>/', CoachConversationDetailView.as_view(), name='ai_coach_conversation_detail'),
 
     # 11. 모의면접 API (STT/TTS 포함)
     path('interview/job-postings/', InterviewJobPostingView.as_view(), name='interview_job_postings'),
@@ -109,6 +120,8 @@ urlpatterns = [
     path('interview/sessions/<int:pk>/', InterviewSessionDetailView.as_view(), name='interview_session_detail'),
     path('interview/sessions/<int:pk>/answer/', InterviewAnswerView.as_view(), name='interview_answer'),
     path('interview/sessions/<int:pk>/vision/', InterviewVisionView.as_view(), name='interview_vision'),
+    # [2026-03-01] 면접 질문 뱅크 검색 API
+    path('interview/questions/search/', InterviewQuestionSearchView.as_view(), name='interview_question_search'),
     path('stt/transcribe/', STTTranscribeView.as_view(), name='stt_transcribe'),
     path('tts/synthesize/', TTSSynthesizeView.as_view(), name='tts_synthesize'),
 
@@ -116,9 +129,19 @@ urlpatterns = [
     path('job-planner/parse/', JobPlannerParseView.as_view(), name='job_planner_parse'),
     path('job-planner/analyze/', JobPlannerAnalyzeView.as_view(), name='job_planner_analyze'),
     path('job-planner/company-analyze/', JobPlannerCompanyAnalyzeView.as_view(), name='job_planner_company_analyze'),
-    path('job-planner/agent-questions/', JobPlannerAgentQuestionsView.as_view(), name='job_planner_agent_questions'),
     path('job-planner/agent-report/', JobPlannerAgentReportView.as_view(), name='job_planner_agent_report'),
     path('job-planner/recommend/', JobPlannerRecommendView.as_view(), name='job_planner_recommend'),
+    path('job-planner/parse-resume/', JobPlannerParseResumeView.as_view(), name='job_planner_parse_resume'),
+    path('job-planner/generate-cover-letter/', JobPlannerGenerateCoverLetterView.as_view(), name='job_planner_generate_cover_letter'),
+    path('job-planner/review-portfolio/', JobPlannerReviewPortfolioView.as_view(), name='job_planner_review_portfolio'),
+    path('job-planner/generate-cover-letter-by-questions/', JobPlannerCoverLetterByQuestionsView.as_view(), name='job_planner_cover_letter_by_questions'),
+
+    # 13. Coduck Wars API
+    path('wars/analyze-code/', CoduckWarsAnalyzeCodeView.as_view(), name='wars_analyze_code'),
+    path('wars/start/', CoduckWarsStartView.as_view(), name='wars_start'),
+    path('wars/pressure-question/', CoduckWarsPressureView.as_view(), name='wars_pressure_question'),
+    path('wars/evaluate/', CoduckWarsEvaluationView.as_view(), name='wars_evaluate'),
+    
 
     # [수정일: 2026-02-26] 관리자 로그 뷰어 API 추가
     path('admin/login/', AdminLoginView.as_view(), name='admin_login'),

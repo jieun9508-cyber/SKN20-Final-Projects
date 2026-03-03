@@ -69,14 +69,10 @@ class SaraminCollector(BaseCollector):
                 browser = p.chromium.launch(headless=True)
                 page = browser.new_page()
 
-                # 2. 사람인 페이지 로드 (networkidle로 JS 리다이렉트 포함 대기)
+                # 2. 사람인 페이지 로드
+                # domcontentloaded: 본문 HTML이 파싱되면 즉시 반환 (광고·분석 스크립트 대기 없음)
                 print(f"[SARAMIN] SaraminCollector: 사람인 페이지 로딩 중... ({actual_url})")
-                try:
-                    page.goto(actual_url, timeout=self.timeout, wait_until='networkidle')
-                except PlaywrightTimeout:
-                    # networkidle 타임아웃 시 domcontentloaded로 재시도
-                    print(f"[WARN] networkidle 타임아웃, domcontentloaded로 재시도...")
-                    page.goto(actual_url, timeout=self.timeout, wait_until='domcontentloaded')
+                page.goto(actual_url, timeout=self.timeout, wait_until='domcontentloaded')
 
                 # 3. 사람인 특정 요소 대기
                 # 사람인은 주로 `.user_content`, `.jv_cont`, `.cont` 등의 클래스 사용
@@ -85,9 +81,6 @@ class SaraminCollector(BaseCollector):
                     page.wait_for_selector('.wrap_jv_cont, .user_content, .cont', timeout=3000)
                 except PlaywrightTimeout:
                     print(f"[WARN] 사람인 콘텐츠 영역 대기 실패, 전체 본문 추출 시도...")
-
-                # 추가 렌더링 대기
-                page.wait_for_timeout(1500)
 
                 # 4. 사람인 본문 추출 (최적화된 셀렉터)
                 # 여러 셀렉터를 시도하여 가장 정확한 본문 추출
