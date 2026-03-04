@@ -77,13 +77,11 @@ export const useProgressStore = defineStore('progress', {
             this.error = null;
         },
 
-        // [수정일: 2026-02-27] 현재 노드 + 다음 노드 해금을 통합하는 편의 액션
-        // gameStore.unlockNextStage()의 "현재+다음" 해금 로직을 progressStore로 이전
+        // [수정일: 2026-02-27] 다음 노드 해금 편의 액션
+        // gameStore.unlockNextStage()의 해금 로직을 progressStore로 이전
         async unlockNextStage(practiceId, nodeIndex) {
             if (!practiceId) return;
-            // 현재 노드 해금
-            await this.unlockNode(practiceId, nodeIndex);
-            // 다음 노드 해금
+            // 다음 노드 해금 (현재 노드는 이미 해금 상태)
             await this.unlockNode(practiceId, nodeIndex + 1);
         },
 

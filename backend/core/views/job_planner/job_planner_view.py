@@ -2100,6 +2100,11 @@ class JobPlannerCompanyAnalyzeView(APIView):
                     "error": "Invalid input type. Use 'url' or 'text'."
                 }, status=status.HTTP_400_BAD_REQUEST)
 
+            # 크롤링 결과 로그 출력
+            print(f"📄 크롤링 결과 ({len(company_info) if company_info else 0}자):")
+            print(company_info[:1000] if company_info else "(없음)")
+            print("--- 크롤링 끝 ---")
+
             # LLM으로 종합 분석
             analysis = self._analyze_company_with_llm(company_name, company_info)
 
@@ -2145,35 +2150,10 @@ class JobPlannerCompanyAnalyzeView(APIView):
         text = trafilatura.extract(downloaded)
         if not text:
             raise Exception("URL에서 텍스트를 추출할 수 없습니다.")
-
-        # 채용 사이트 → BeautifulSoup 방식
-        if any(domain in url for domain in JOB_SITE_DOMAINS):
-            response = requests.get(url, headers=headers, timeout=10)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.text, 'html.parser')
-            for tag in soup(["script", "style"]):
-                tag.decompose()
-            text = soup.get_text(separator='\n', strip=True)
-
-            # 결과가 너무 짧으면 trafilatura로 fallback
-            if len(text) < 200:
-                import trafilatura
-                fallback = trafilatura.extract(response.text)
-                if fallback:
-                    return fallback
-
-            return text
-
-        # 일반 사이트(회사 홈페이지, 뉴스, 블로그 등) → trafilatura
-        import trafilatura
-        downloaded = trafilatura.fetch_url(url)
-        text = trafilatura.extract(downloaded)
-        if not text:
-            raise Exception("URL에서 텍스트를 추출할 수 없습니다.")
         return text
 
     def _analyze_company_with_llm(self, company_name, company_info):
-        """LLM으로 기업 종합 분석"""
+        """LLM으로 기업 종합 분석 (크롤링 정보 부족 시 웹서치 보충)"""
         api_key = os.getenv('OPENAI_API_KEY')
         if not api_key:
             return {
@@ -2185,34 +2165,7 @@ class JobPlannerCompanyAnalyzeView(APIView):
                 "welfare": {}
             }
 
-        try:
-            client = openai.OpenAI(api_key=api_key)
-
-            response = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """당신은 IT 기업 분석 전문가입니다.
-회사 정보를 바탕으로 다음 4가지 항목을 분석하여 JSON 형식으로 반환하세요:
-1. 회사 개요 및 비전
-2. 기술 스택 및 개발 문화
-3. 성장성 및 안정성
-4. 복지 및 근무환경
-
-정보가 부족하면 일반적인 인사이트를 제공하세요."""
-                    },
-                    {
-                        "role": "user",
-                        "content": f"""다음 회사 정보를 분석해주세요:
-
-회사명: {company_name}
-
-정보:
-{company_info[:3000]}
-
-JSON 형식으로 반환:
-{{
+        json_format = f"""{{
   "company_name": "{company_name}",
   "overview": {{
     "description": "회사 소개 (2-3문장)",
@@ -2240,20 +2193,61 @@ JSON 형식으로 반환:
     "work_life_balance": "워라밸 평가 및 설명",
     "remote_work": "리모트 근무 가능 여부"
   }},
-  "overall_score": {{
-    "tech_score": 0.0-1.0,
-    "growth_score": 0.0-1.0,
-    "welfare_score": 0.0-1.0,
-    "total_score": 0.0-1.0
-  }},
   "recommendation": "이 회사에 지원하면 좋은 이유 또는 주의사항 (3-4문장)"
 }}"""
-                    }
-                ],
-                temperature=0.5
-            )
 
-            content = response.choices[0].message.content
+        try:
+            client = openai.OpenAI(api_key=api_key)
+            use_web_search = not company_info or len(company_info.strip()) < 200
+
+            if use_web_search:
+                # 크롤링 정보 부족 → Responses API + web_search로 실시간 검색
+                print(f"🔍 크롤링 정보 부족 ({len(company_info.strip()) if company_info else 0}자) → 웹서치 사용")
+                response = client.responses.create(
+                    model="gpt-4o-mini",
+                    tools=[{"type": "web_search_preview"}],
+                    input=f"""당신은 IT 기업 분석 전문가입니다.
+"{company_name}" 회사에 대해 웹 검색을 수행하여 다음 정보를 수집하고 JSON 형식으로 반환하세요.
+검색 키워드 예시: "{company_name} 기술스택", "{company_name} 복지", "{company_name} 채용", "{company_name} 투자"
+
+중요: 검색 결과에서 확인할 수 없는 정보는 절대 추측하거나 지어내지 마세요. 확인되지 않은 항목은 문자열이면 null, 리스트면 빈 배열 []로 남겨주세요.
+
+반드시 아래 JSON 형식만 반환하세요:
+{json_format}"""
+                )
+                content = response.output_text
+            else:
+                # 크롤링 정보 충분 → 기존 Chat Completions 방식
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": """당신은 IT 기업 분석 전문가입니다.
+회사 정보를 바탕으로 다음 4가지 항목을 분석하여 JSON 형식으로 반환하세요:
+1. 회사 개요 및 비전
+2. 기술 스택 및 개발 문화
+3. 성장성 및 안정성
+4. 복지 및 근무환경
+
+중요: 제공된 정보에서 확인할 수 없는 항목은 절대 추측하거나 지어내지 마세요. 확인되지 않은 항목은 문자열이면 null, 리스트면 빈 배열 []로 남겨주세요."""
+                        },
+                        {
+                            "role": "user",
+                            "content": f"""다음 회사 정보를 분석해주세요:
+
+회사명: {company_name}
+
+정보:
+{company_info[:3000]}
+
+JSON 형식으로 반환:
+{json_format}"""
+                        }
+                    ],
+                    temperature=0.5
+                )
+                content = response.choices[0].message.content
 
             # JSON 추출
             if '```json' in content:
@@ -2273,7 +2267,6 @@ JSON 형식으로 반환:
                 "tech_stack": {"languages": [], "frameworks": [], "tools": [], "culture": "", "tech_blog": ""},
                 "growth": {"funding": "", "market_position": "", "growth_potential": "중", "stability": "중"},
                 "welfare": {"salary_level": "", "benefits": [], "work_life_balance": "", "remote_work": ""},
-                "overall_score": {"tech_score": 0.5, "growth_score": 0.5, "welfare_score": 0.5, "total_score": 0.5},
                 "recommendation": "정보가 부족하여 분석할 수 없습니다."
             }
 

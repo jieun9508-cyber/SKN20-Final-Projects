@@ -58,16 +58,8 @@
                 placeholder="https://company.com 또는 https://www.wanted.co.kr/company/..."
                 class="url-input"
               >
-              <p class="input-hint">회사 홈페이지나 원티드 기업 페이지를 입력하면 기업분석도 함께 진행됩니다</p>
+              <p class="input-hint">회사 홈페이지나 채용 사이트에서 기업 페이지를 입력하면 기업분석도 함께 진행됩니다</p>
 
-              <button
-                class="btn-parse"
-                @click="parseJobPosting"
-                :disabled="!urlInput || isParsing"
-              >
-                <span v-if="!isParsing">🔍 분석 시작</span>
-                <span v-else>⏳ 분석 중...</span>
-              </button>
             </div>
 
             <!-- Parsed Job Data Preview -->
@@ -224,15 +216,131 @@
                 </div>
               </div>
 
-              <!-- 기업분석 상태 표시 -->
-              <div v-if="isAnalyzingCompany || companyAnalysis" class="company-analysis-section">
-                <div v-if="isAnalyzingCompany" class="company-analyzing-msg">
+              <!-- 기업분석 상태/결과 표시 -->
+              <div v-if="isAnalyzingCompany" class="company-analysis-section">
+                <div class="company-analyzing-msg">
                   ⏳ 기업 분석 중...
                 </div>
-                <div v-if="companyAnalysis" class="company-analysis-preview">
-                  <div class="preview-badge">✅ 기업분석 완료</div>
-                  <div class="preview-score">
-                    종합 점수: {{ (companyAnalysis.overall_score?.total_score * 100).toFixed(0) }}점
+              </div>
+
+              <div v-if="companyAnalysis" class="company-analysis-results">
+                <h3 class="analysis-title">🏢 기업 분석 결과</h3>
+
+                <div class="analysis-section">
+                  <h4 class="section-subtitle">📋 회사 개요</h4>
+                  <div class="analysis-content">
+                    <p>{{ companyAnalysis.overview.description }}</p>
+                    <div class="info-grid">
+                      <div class="info-item" v-if="companyAnalysis.overview.industry">
+                        <span class="info-label">산업:</span>
+                        <span class="info-value">{{ companyAnalysis.overview.industry }}</span>
+                      </div>
+                      <div class="info-item" v-if="companyAnalysis.overview.size">
+                        <span class="info-label">규모:</span>
+                        <span class="info-value">{{ companyAnalysis.overview.size }}</span>
+                      </div>
+                      <div class="info-item" v-if="companyAnalysis.overview.founded_year">
+                        <span class="info-label">설립:</span>
+                        <span class="info-value">{{ companyAnalysis.overview.founded_year }}년</span>
+                      </div>
+                    </div>
+                    <p v-if="companyAnalysis.overview.vision" class="vision-text">
+                      <strong>비전:</strong> {{ companyAnalysis.overview.vision }}
+                    </p>
+                  </div>
+                </div>
+
+                <div class="analysis-section">
+                  <h4 class="section-subtitle">💻 기술 스택 및 개발 문화</h4>
+                  <div class="analysis-content">
+                    <div class="tech-tags" v-if="companyAnalysis.tech_stack.languages?.length">
+                      <span class="tag-label">언어:</span>
+                      <span v-for="(lang, idx) in companyAnalysis.tech_stack.languages" :key="'lang-' + idx" class="tech-tag">
+                        {{ lang }}
+                      </span>
+                    </div>
+                    <div class="tech-tags" v-if="companyAnalysis.tech_stack.frameworks?.length">
+                      <span class="tag-label">프레임워크:</span>
+                      <span v-for="(fw, idx) in companyAnalysis.tech_stack.frameworks" :key="'fw-' + idx" class="tech-tag">
+                        {{ fw }}
+                      </span>
+                    </div>
+                    <div class="tech-tags" v-if="companyAnalysis.tech_stack.tools?.length">
+                      <span class="tag-label">도구:</span>
+                      <span v-for="(tool, idx) in companyAnalysis.tech_stack.tools" :key="'tool-' + idx" class="tech-tag">
+                        {{ tool }}
+                      </span>
+                    </div>
+                    <p v-if="companyAnalysis.tech_stack.culture">{{ companyAnalysis.tech_stack.culture }}</p>
+                    <p v-if="companyAnalysis.tech_stack.tech_blog" class="tech-blog-info">
+                      📝 기술 블로그:
+                      <a
+                        v-if="companyAnalysis.tech_stack.tech_blog.startsWith('http')"
+                        :href="companyAnalysis.tech_stack.tech_blog"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="tech-blog-link"
+                      >{{ companyAnalysis.tech_stack.tech_blog }}</a>
+                      <span v-else>{{ companyAnalysis.tech_stack.tech_blog }}</span>
+                    </p>
+                  </div>
+                </div>
+
+                <div class="analysis-section">
+                  <h4 class="section-subtitle">📈 성장성 및 안정성</h4>
+                  <div class="analysis-content">
+                    <div class="growth-grid">
+                      <div class="growth-item">
+                        <span class="growth-label">투자:</span>
+                        <span class="growth-value">{{ companyAnalysis.growth.funding || '정보 없음' }}</span>
+                      </div>
+                      <div class="growth-item">
+                        <span class="growth-label">시장 위치:</span>
+                        <span class="growth-value">{{ companyAnalysis.growth.market_position || '정보 없음' }}</span>
+                      </div>
+                      <div class="growth-item">
+                        <span class="growth-label">성장 가능성:</span>
+                        <span :class="['growth-badge', companyAnalysis.growth.growth_potential]">
+                          {{ companyAnalysis.growth.growth_potential }}
+                        </span>
+                      </div>
+                      <div class="growth-item">
+                        <span class="growth-label">안정성:</span>
+                        <span :class="['growth-badge', companyAnalysis.growth.stability]">
+                          {{ companyAnalysis.growth.stability }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="analysis-section">
+                  <h4 class="section-subtitle">🎁 복지 및 근무환경</h4>
+                  <div class="analysis-content">
+                    <div class="welfare-item" v-if="companyAnalysis.welfare.salary_level">
+                      <strong>연봉 수준:</strong> {{ companyAnalysis.welfare.salary_level }}
+                    </div>
+                    <div class="welfare-item" v-if="companyAnalysis.welfare.benefits?.length">
+                      <strong>복지 혜택:</strong>
+                      <ul class="benefits-list">
+                        <li v-for="(benefit, idx) in companyAnalysis.welfare.benefits" :key="'benefit-' + idx">
+                          {{ benefit }}
+                        </li>
+                      </ul>
+                    </div>
+                    <div class="welfare-item" v-if="companyAnalysis.welfare.work_life_balance">
+                      <strong>워라밸:</strong> {{ companyAnalysis.welfare.work_life_balance }}
+                    </div>
+                    <div class="welfare-item" v-if="companyAnalysis.welfare.remote_work">
+                      <strong>리모트:</strong> {{ companyAnalysis.welfare.remote_work }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="analysis-section recommendation-section">
+                  <h4 class="section-subtitle">💡 종합 평가</h4>
+                  <div class="recommendation-content">
+                    {{ companyAnalysis.recommendation }}
                   </div>
                 </div>
               </div>
@@ -244,12 +352,22 @@
               </div>
             </div>
 
-            <div class="step-next-row">
-              <button class="btn-next" @click="currentStep = 'profile'">
-                <span v-if="isParsing">⏳ 분석 중... 내 정보 먼저 입력 →</span>
-                <span v-else>다음: 내 정보 입력 →</span>
-              </button>
-            </div>
+            <button
+              v-if="!(jobData && !isParsing && !isAnalyzingCompany)"
+              class="btn-parse"
+              @click="parseJobPosting"
+              :disabled="!urlInput || isParsing || isAnalyzingCompany"
+            >
+              <span v-if="isParsing || isAnalyzingCompany">⏳ 분석 중...</span>
+              <span v-else>🔍 분석 시작</span>
+            </button>
+            <button
+              v-else
+              class="btn-next"
+              @click="currentStep = 'profile'"
+            >
+              다음: 내 정보 입력 →
+            </button>
           </div>
 
           <!-- Step 2: 내 프로필 -->
@@ -257,25 +375,6 @@
             <h3 class="step-title">내 정보를 입력하세요</h3>
             <div v-if="isParsing" class="parsing-background-notice">
               ⏳ 채용공고 분석이 백그라운드에서 진행 중입니다. 완료되면 자동으로 반영됩니다.
-            </div>
-
-            <!-- 정보 부족 팝업 -->
-            <div v-if="showInsufficientPopup" class="insufficient-popup-overlay" @click.self="showInsufficientPopup = false">
-              <div class="insufficient-popup">
-                <div class="insufficient-popup-icon">⚠️</div>
-                <div class="insufficient-popup-title">공고 정보가 부족합니다</div>
-                <div class="insufficient-popup-body">
-                  <p>분석 결과 다음 정보가 부족합니다:</p>
-                  <div class="insufficient-popup-fields">
-                    <span v-for="field in missingFields" :key="field" class="missing-field-tag">{{ field }}</span>
-                  </div>
-                  <p class="insufficient-popup-hint">공고 입력 화면으로 돌아가서 이미지나 텍스트를 추가해 주세요.</p>
-                </div>
-                <div class="insufficient-popup-actions">
-                  <button class="btn-go-back" @click="showInsufficientPopup = false; currentStep = 'input'">공고 입력으로 돌아가기</button>
-                  <button class="btn-dismiss" @click="showInsufficientPopup = false">이대로 진행</button>
-                </div>
-              </div>
             </div>
 
             <div class="profile-form">
@@ -581,12 +680,12 @@
             <div class="skill-section" v-if="analysisResult.missing_skills.length > 0">
               <h4 class="section-subtitle">❌ 부족한 스킬 ({{ analysisResult.missing_skills.length }}개)</h4>
               <div class="skill-list missing">
-                <div
-                  v-for="(miss, idx) in analysisResult.missing_skills"
-                  :key="'missing-' + idx"
-                  class="skill-item"
-                >
-                  <span class="skill-name">{{ miss.required }}</span>
+                <div class="skill-item">
+                  <span
+                    v-for="(miss, idx) in analysisResult.missing_skills"
+                    :key="'missing-' + idx"
+                    class="skill-tag-missing"
+                  >{{ miss.required }}</span>
                 </div>
               </div>
             </div>
@@ -685,159 +784,6 @@
               </p>
             </div>
 
-            <!-- Company Analysis Results -->
-            <div v-if="companyAnalysis" class="company-analysis-results">
-              <h3 class="analysis-title">🏢 기업 분석 결과</h3>
-
-              <!-- Overall Scores -->
-              <div class="company-score-grid">
-                <div class="company-score-card">
-                  <div class="score-label">기술력</div>
-                  <div class="score-bar">
-                    <div class="score-fill" :style="{ width: (companyAnalysis.overall_score.tech_score * 100) + '%' }"></div>
-                  </div>
-                  <div class="score-text">{{ (companyAnalysis.overall_score.tech_score * 100).toFixed(0) }}점</div>
-                </div>
-                <div class="company-score-card">
-                  <div class="score-label">성장성</div>
-                  <div class="score-bar">
-                    <div class="score-fill" :style="{ width: (companyAnalysis.overall_score.growth_score * 100) + '%' }"></div>
-                  </div>
-                  <div class="score-text">{{ (companyAnalysis.overall_score.growth_score * 100).toFixed(0) }}점</div>
-                </div>
-                <div class="company-score-card">
-                  <div class="score-label">복지</div>
-                  <div class="score-bar">
-                    <div class="score-fill" :style="{ width: (companyAnalysis.overall_score.welfare_score * 100) + '%' }"></div>
-                  </div>
-                  <div class="score-text">{{ (companyAnalysis.overall_score.welfare_score * 100).toFixed(0) }}점</div>
-                </div>
-              </div>
-
-              <!-- Company Overview -->
-              <div class="analysis-section">
-                <h4 class="section-subtitle">📋 회사 개요</h4>
-                <div class="analysis-content">
-                  <p>{{ companyAnalysis.overview.description }}</p>
-                  <div class="info-grid">
-                    <div class="info-item" v-if="companyAnalysis.overview.industry">
-                      <span class="info-label">산업:</span>
-                      <span class="info-value">{{ companyAnalysis.overview.industry }}</span>
-                    </div>
-                    <div class="info-item" v-if="companyAnalysis.overview.size">
-                      <span class="info-label">규모:</span>
-                      <span class="info-value">{{ companyAnalysis.overview.size }}</span>
-                    </div>
-                    <div class="info-item" v-if="companyAnalysis.overview.founded_year">
-                      <span class="info-label">설립:</span>
-                      <span class="info-value">{{ companyAnalysis.overview.founded_year }}년</span>
-                    </div>
-                  </div>
-                  <p v-if="companyAnalysis.overview.vision" class="vision-text">
-                    <strong>비전:</strong> {{ companyAnalysis.overview.vision }}
-                  </p>
-                </div>
-              </div>
-
-              <!-- Tech Stack -->
-              <div class="analysis-section">
-                <h4 class="section-subtitle">💻 기술 스택 및 개발 문화</h4>
-                <div class="analysis-content">
-                  <div class="tech-tags" v-if="companyAnalysis.tech_stack.languages?.length">
-                    <span class="tag-label">언어:</span>
-                    <span v-for="(lang, idx) in companyAnalysis.tech_stack.languages" :key="'lang-' + idx" class="tech-tag">
-                      {{ lang }}
-                    </span>
-                  </div>
-                  <div class="tech-tags" v-if="companyAnalysis.tech_stack.frameworks?.length">
-                    <span class="tag-label">프레임워크:</span>
-                    <span v-for="(fw, idx) in companyAnalysis.tech_stack.frameworks" :key="'fw-' + idx" class="tech-tag">
-                      {{ fw }}
-                    </span>
-                  </div>
-                  <div class="tech-tags" v-if="companyAnalysis.tech_stack.tools?.length">
-                    <span class="tag-label">도구:</span>
-                    <span v-for="(tool, idx) in companyAnalysis.tech_stack.tools" :key="'tool-' + idx" class="tech-tag">
-                      {{ tool }}
-                    </span>
-                  </div>
-                  <p v-if="companyAnalysis.tech_stack.culture">{{ companyAnalysis.tech_stack.culture }}</p>
-                  <p v-if="companyAnalysis.tech_stack.tech_blog" class="tech-blog-info">
-                    📝 기술 블로그:
-                    <a
-                      v-if="companyAnalysis.tech_stack.tech_blog.startsWith('http')"
-                      :href="companyAnalysis.tech_stack.tech_blog"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="tech-blog-link"
-                    >{{ companyAnalysis.tech_stack.tech_blog }}</a>
-                    <span v-else>{{ companyAnalysis.tech_stack.tech_blog }}</span>
-                  </p>
-                </div>
-              </div>
-
-              <!-- Growth & Stability -->
-              <div class="analysis-section">
-                <h4 class="section-subtitle">📈 성장성 및 안정성</h4>
-                <div class="analysis-content">
-                  <div class="growth-grid">
-                    <div class="growth-item">
-                      <span class="growth-label">투자:</span>
-                      <span class="growth-value">{{ companyAnalysis.growth.funding || '정보 없음' }}</span>
-                    </div>
-                    <div class="growth-item">
-                      <span class="growth-label">시장 위치:</span>
-                      <span class="growth-value">{{ companyAnalysis.growth.market_position || '정보 없음' }}</span>
-                    </div>
-                    <div class="growth-item">
-                      <span class="growth-label">성장 가능성:</span>
-                      <span :class="['growth-badge', companyAnalysis.growth.growth_potential]">
-                        {{ companyAnalysis.growth.growth_potential }}
-                      </span>
-                    </div>
-                    <div class="growth-item">
-                      <span class="growth-label">안정성:</span>
-                      <span :class="['growth-badge', companyAnalysis.growth.stability]">
-                        {{ companyAnalysis.growth.stability }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Welfare -->
-              <div class="analysis-section">
-                <h4 class="section-subtitle">🎁 복지 및 근무환경</h4>
-                <div class="analysis-content">
-                  <div class="welfare-item" v-if="companyAnalysis.welfare.salary_level">
-                    <strong>연봉 수준:</strong> {{ companyAnalysis.welfare.salary_level }}
-                  </div>
-                  <div class="welfare-item" v-if="companyAnalysis.welfare.benefits?.length">
-                    <strong>복지 혜택:</strong>
-                    <ul class="benefits-list">
-                      <li v-for="(benefit, idx) in companyAnalysis.welfare.benefits" :key="'benefit-' + idx">
-                        {{ benefit }}
-                      </li>
-                    </ul>
-                  </div>
-                  <div class="welfare-item" v-if="companyAnalysis.welfare.work_life_balance">
-                    <strong>워라밸:</strong> {{ companyAnalysis.welfare.work_life_balance }}
-                  </div>
-                  <div class="welfare-item" v-if="companyAnalysis.welfare.remote_work">
-                    <strong>리모트:</strong> {{ companyAnalysis.welfare.remote_work }}
-                  </div>
-                </div>
-              </div>
-
-              <!-- Recommendation -->
-              <div class="analysis-section recommendation-section">
-                <h4 class="section-subtitle">💡 종합 평가</h4>
-                <div class="recommendation-content">
-                  {{ companyAnalysis.recommendation }}
-                </div>
-              </div>
-            </div>
-
             <!-- Final Report -->
             <div v-if="finalReport" class="final-report-section">
               <h3 class="report-title">📊 종합 취업 전략 보고서</h3>
@@ -913,6 +859,52 @@
                 </div>
               </div>
 
+              <!-- 포트폴리오 분석 결과 (서류 업로드한 경우만) -->
+              <div v-if="portfolioPdf && (isReviewingPortfolio || portfolioReview)" class="action-tools-section" style="margin-top: 24px;">
+                <h4 class="section-subtitle">📊 포트폴리오 분석 결과</h4>
+                <div v-if="isReviewingPortfolio" class="parsing-background-notice">
+                  ⏳ 포트폴리오 분석 중...
+                </div>
+                <div v-if="portfolioReview" class="portfolio-review-result">
+                  <div class="review-section" v-if="portfolioReview.strengths?.length">
+                    <div class="review-section-title">💪 강점</div>
+                    <ul class="review-list">
+                      <li v-for="(item, idx) in portfolioReview.strengths" :key="'ps-' + idx">{{ item }}</li>
+                    </ul>
+                  </div>
+                  <div class="review-section" v-if="portfolioReview.improvements?.length">
+                    <div class="review-section-title">🔧 개선 제안</div>
+                    <div
+                      class="improvement-card"
+                      v-for="(imp, idx) in portfolioReview.improvements"
+                      :key="'pi-' + idx"
+                    >
+                      <div class="imp-target">🎯 {{ imp.target }}</div>
+                      <div class="imp-issue">⚠️ {{ imp.issue }}</div>
+                      <div class="imp-suggestion">💡 {{ imp.suggestion }}</div>
+                    </div>
+                  </div>
+                  <div class="review-section" v-if="portfolioReview.missing?.length">
+                    <div class="review-section-title">❌ 부족한 부분</div>
+                    <ul class="review-list missing">
+                      <li v-for="(item, idx) in portfolioReview.missing" :key="'pm-' + idx">{{ item }}</li>
+                    </ul>
+                  </div>
+                  <div class="review-section" v-if="portfolioReview.portfolio_structure?.length">
+                    <div class="review-section-title">📋 포트폴리오 구성 가이드</div>
+                    <ol class="review-list priority">
+                      <li v-for="(item, idx) in portfolioReview.portfolio_structure" :key="'pst-' + idx">{{ item }}</li>
+                    </ol>
+                  </div>
+                  <div class="review-section" v-if="portfolioReview.priority_actions?.length">
+                    <div class="review-section-title">🚀 우선 실행 액션</div>
+                    <ol class="review-list priority">
+                      <li v-for="(item, idx) in portfolioReview.priority_actions" :key="'pp-' + idx">{{ item }}</li>
+                    </ol>
+                  </div>
+                </div>
+              </div>
+
               <!-- Execution Strategy -->
               <div class="execution-section">
                 <h4 class="section-subtitle">🎯 실행 전략</h4>
@@ -964,91 +956,6 @@
               </div>
             </div>
 
-            <!-- AI 지원 도구 -->
-            <div class="action-tools-section">
-              <h3 class="action-tools-title">🛠️ AI 지원 도구</h3>
-              <div class="action-tools-buttons">
-                <button class="btn-tool" @click="reviewPortfolio" :disabled="isReviewingPortfolio">
-                  <span v-if="isReviewingPortfolio">⏳ 분석 중...</span>
-                  <span v-else>📊 포트폴리오 개선점 분석</span>
-                </button>
-              </div>
-
-              <!-- 자기소개서: 기업 문항 기반 -->
-              <div class="cover-letter-questions-section">
-                <h4 class="result-subtitle">✍️ 기업 문항별 자기소개서</h4>
-                <p class="questions-hint">기업의 자기소개서 항목을 입력하세요 (항목당 한 줄)</p>
-                <textarea
-                  v-model="coverLetterQuestions"
-                  class="questions-textarea"
-                  placeholder="예시)&#10;성장 과정을 서술하세요 (500자 이내)&#10;지원 동기를 써주세요 (700자 이내)&#10;입사 후 포부를 작성하세요 (500자 이내)"
-                  rows="5"
-                ></textarea>
-                <button
-                  class="btn-tool"
-                  @click="generateCoverLetterByQuestions"
-                  :disabled="isGeneratingCoverLetter || !coverLetterQuestions.trim()"
-                >
-                  <span v-if="isGeneratingCoverLetter">⏳ 작성 중...</span>
-                  <span v-else>✍️ 문항별 자기소개서 작성</span>
-                </button>
-              </div>
-
-              <!-- 생성된 자기소개서 -->
-              <div v-if="generatedCoverLetter" class="cover-letter-result">
-                <h4 class="result-subtitle">✍️ 자기소개서</h4>
-                <div
-                  v-for="(item, idx) in generatedCoverLetter"
-                  :key="'cl-' + idx"
-                  class="cover-letter-item"
-                >
-                  <div class="cl-question">Q{{ idx + 1 }}. {{ item.question }}</div>
-                  <pre class="cover-letter-text">{{ item.answer }}</pre>
-                </div>
-              </div>
-
-              <!-- 포트폴리오 분석 결과 -->
-              <div v-if="portfolioReview" class="portfolio-review-result">
-                <h4 class="result-subtitle">📊 포트폴리오 분석 결과</h4>
-                <div class="review-section" v-if="portfolioReview.strengths?.length">
-                  <div class="review-section-title">💪 강점</div>
-                  <ul class="review-list">
-                    <li v-for="(item, idx) in portfolioReview.strengths" :key="'ps-' + idx">{{ item }}</li>
-                  </ul>
-                </div>
-                <div class="review-section" v-if="portfolioReview.improvements?.length">
-                  <div class="review-section-title">🔧 개선 제안</div>
-                  <div
-                    class="improvement-card"
-                    v-for="(imp, idx) in portfolioReview.improvements"
-                    :key="'pi-' + idx"
-                  >
-                    <div class="imp-target">🎯 {{ imp.target }}</div>
-                    <div class="imp-issue">⚠️ {{ imp.issue }}</div>
-                    <div class="imp-suggestion">💡 {{ imp.suggestion }}</div>
-                  </div>
-                </div>
-                <div class="review-section" v-if="portfolioReview.missing?.length">
-                  <div class="review-section-title">❌ 부족한 부분</div>
-                  <ul class="review-list missing">
-                    <li v-for="(item, idx) in portfolioReview.missing" :key="'pm-' + idx">{{ item }}</li>
-                  </ul>
-                </div>
-                <div class="review-section" v-if="portfolioReview.portfolio_structure?.length">
-                  <div class="review-section-title">📋 포트폴리오 구성 가이드</div>
-                  <ol class="review-list priority">
-                    <li v-for="(item, idx) in portfolioReview.portfolio_structure" :key="'pst-' + idx">{{ item }}</li>
-                  </ol>
-                </div>
-                <div class="review-section" v-if="portfolioReview.priority_actions?.length">
-                  <div class="review-section-title">🚀 우선 실행 액션</div>
-                  <ol class="review-list priority">
-                    <li v-for="(item, idx) in portfolioReview.priority_actions" :key="'pp-' + idx">{{ item }}</li>
-                  </ol>
-                </div>
-              </div>
-            </div>
-
             <button class="btn-restart" @click="resetAll">
               🔄 새로운 공고 분석하기
             </button>
@@ -1092,7 +999,6 @@ export default {
       supplementImagePreviews: [],
       supplementText: '',
       isSupplementParsing: false,
-      showInsufficientPopup: false,
 
       // 서류 업로드
       resumePdf: null,
@@ -1185,11 +1091,8 @@ export default {
       isLoadingRecommendations: false,
       recommendationsSearched: false,
 
-      // Cover Letter & Portfolio Review
-      coverLetterQuestions: '',
-      generatedCoverLetter: null,
+      // Portfolio Review
       portfolioReview: null,
-      isGeneratingCoverLetter: false,
       isReviewingPortfolio: false,
 
       // Status
@@ -1385,6 +1288,11 @@ export default {
       this.isParsing = true;
       this.errorMessage = '';
 
+      // 기업 URL이 있으면 기업분석을 병렬로 동시 시작
+      if (this.companyUrl) {
+        this.analyzeCompany(this.companyUrl);
+      }
+
       try {
         const requestData = { type: 'url', url: this.urlInput };
         const response = await axios.post('/api/core/job-planner/parse/', requestData);
@@ -1400,14 +1308,6 @@ export default {
           this.checkDataCompleteness();
           const gameStore = useGameStore();
           gameStore.setLastParsedJob(this.jobData);
-          // 기업 URL이 있으면 기업분석 백그라운드 실행
-          if (this.companyUrl) {
-            this.analyzeCompany(this.companyUrl);
-          }
-          // 분석 완료 후 정보 부족 + 내 정보 탭에 있으면 팝업
-          if (this.needsMoreInfo && this.currentStep !== 'input') {
-            this.showInsufficientPopup = true;
-          }
         }
       }
     },
@@ -1651,9 +1551,9 @@ export default {
         this.currentStep = 'result';
         this.fetchRecommendations();
         this.generateFinalReport();
-        this.currentStep = 'result';
-        this.fetchRecommendations();
-        this.generateFinalReport();
+        if (this.portfolioPdf) {
+          this.reviewPortfolio();
+        }
 
       } catch (error) {
         console.error('분석 실패:', error);
@@ -1826,35 +1726,12 @@ export default {
       this.supplementImagePreviews = [];
       this.supplementText = '';
       this.isSupplementParsing = false;
-      this.showInsufficientPopup = false;
       this.analysisResult = null;
       this.finalReport = null;
       this.recommendations = [];
       this.recommendationsSearched = false;
       this.errorMessage = '';
       this.currentStep = 'input';
-    },
-
-    async generateCoverLetterByQuestions() {
-      this.isGeneratingCoverLetter = true;
-      this.generatedCoverLetter = null;
-      const questions = this.coverLetterQuestions
-        .split('\n')
-        .map(q => q.trim())
-        .filter(q => q.length > 0);
-      try {
-        const response = await axios.post('/api/core/job-planner/generate-cover-letter-by-questions/', {
-          user_profile: this.analysisResult?.profile_summary || {},
-          job_data: this.jobData,
-          company_analysis: this.companyAnalysis,
-          questions,
-        });
-        this.generatedCoverLetter = response.data.answers;
-      } catch (error) {
-        this.errorMessage = error.response?.data?.error || '자기소개서 생성 중 오류가 발생했습니다.';
-      } finally {
-        this.isGeneratingCoverLetter = false;
-      }
     },
 
     async reviewPortfolio() {
@@ -1966,10 +1843,7 @@ export default {
       this.finalReport = null;
       this.recommendations = [];
       this.recommendationsSearched = false;
-      this.coverLetterQuestions = '';
-      this.generatedCoverLetter = null;
       this.portfolioReview = null;
-      this.isGeneratingCoverLetter = false;
       this.isReviewingPortfolio = false;
       this.errorMessage = '';
     }
@@ -2295,111 +2169,6 @@ export default {
   font-size: 14px;
 }
 
-/* 정보 부족 팝업 */
-.insufficient-popup-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-}
-
-.insufficient-popup {
-  background: #1e293b;
-  border: 1px solid rgba(251, 191, 36, 0.4);
-  border-radius: 16px;
-  padding: 28px 32px;
-  max-width: 420px;
-  width: 90%;
-  text-align: center;
-}
-
-.insufficient-popup-icon {
-  font-size: 40px;
-  margin-bottom: 12px;
-}
-
-.insufficient-popup-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fbbf24;
-  margin-bottom: 16px;
-}
-
-.insufficient-popup-body {
-  color: #d1d5db;
-  font-size: 14px;
-  line-height: 1.6;
-  margin-bottom: 20px;
-}
-
-.insufficient-popup-fields {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-  margin: 12px 0;
-}
-
-.missing-field-tag {
-  padding: 4px 12px;
-  background: rgba(239, 68, 68, 0.15);
-  border: 1px solid rgba(239, 68, 68, 0.3);
-  border-radius: 20px;
-  color: #f87171;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.insufficient-popup-hint {
-  color: #9ca3af;
-  font-size: 13px;
-  margin-top: 8px;
-}
-
-.insufficient-popup-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-}
-
-.btn-go-back {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-  border: none;
-  border-radius: 8px;
-  color: #000;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-go-back:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-}
-
-.btn-dismiss {
-  padding: 10px 20px;
-  background: transparent;
-  border: 1px solid #4b5563;
-  border-radius: 8px;
-  color: #9ca3af;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-dismiss:hover {
-  border-color: #6b7280;
-  color: #d1d5db;
-}
 
 .btn-reset-job {
   padding: 14px 24px;
@@ -2828,6 +2597,19 @@ export default {
 
 .skill-list.missing .skill-item {
   border-left: 3px solid #ef4444;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-tag-missing {
+  padding: 4px 12px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 20px;
+  color: #f87171;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .skill-required {
@@ -4403,79 +4185,6 @@ export default {
   cursor: not-allowed;
 }
 
-/* 자기소개서 문항 입력 */
-.cover-letter-questions-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-.questions-hint {
-  font-size: 12px;
-  color: #94a3b8;
-  margin: 6px 0 10px;
-}
-
-.questions-textarea {
-  width: 100%;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: 8px;
-  color: #e2e8f0;
-  font-size: 13px;
-  padding: 10px 12px;
-  resize: vertical;
-  margin-bottom: 10px;
-  font-family: inherit;
-  line-height: 1.6;
-}
-
-.questions-textarea:focus {
-  outline: none;
-  border-color: #7c3aed;
-}
-
-/* 자기소개서 결과 */
-.cover-letter-result {
-  margin-top: 20px;
-}
-
-.result-subtitle {
-  font-size: 15px;
-  font-weight: 700;
-  color: #c4b5fd;
-  margin: 0 0 12px 0;
-}
-
-.cover-letter-item {
-  margin-bottom: 20px;
-}
-
-.cl-question {
-  font-size: 13px;
-  font-weight: 700;
-  color: #c4b5fd;
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  background: rgba(124, 58, 237, 0.15);
-  border-left: 3px solid #7c3aed;
-  border-radius: 0 6px 6px 0;
-}
-
-.cover-letter-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #e2e8f0;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 8px;
-  padding: 16px;
-  margin: 0;
-}
-
 /* 포트폴리오 분석 결과 */
 .portfolio-review-result {
   margin-top: 20px;
@@ -4593,79 +4302,6 @@ export default {
 .btn-tool:disabled {
   opacity: 0.55;
   cursor: not-allowed;
-}
-
-/* 자기소개서 문항 입력 */
-.cover-letter-questions-section {
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(139, 92, 246, 0.2);
-}
-
-.questions-hint {
-  font-size: 12px;
-  color: #94a3b8;
-  margin: 6px 0 10px;
-}
-
-.questions-textarea {
-  width: 100%;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(139, 92, 246, 0.3);
-  border-radius: 8px;
-  color: #e2e8f0;
-  font-size: 13px;
-  padding: 10px 12px;
-  resize: vertical;
-  margin-bottom: 10px;
-  font-family: inherit;
-  line-height: 1.6;
-}
-
-.questions-textarea:focus {
-  outline: none;
-  border-color: #7c3aed;
-}
-
-/* 자기소개서 결과 */
-.cover-letter-result {
-  margin-top: 20px;
-}
-
-.result-subtitle {
-  font-size: 15px;
-  font-weight: 700;
-  color: #c4b5fd;
-  margin: 0 0 12px 0;
-}
-
-.cover-letter-item {
-  margin-bottom: 20px;
-}
-
-.cl-question {
-  font-size: 13px;
-  font-weight: 700;
-  color: #c4b5fd;
-  margin-bottom: 8px;
-  padding: 6px 10px;
-  background: rgba(124, 58, 237, 0.15);
-  border-left: 3px solid #7c3aed;
-  border-radius: 0 6px 6px 0;
-}
-
-.cover-letter-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: inherit;
-  font-size: 13px;
-  line-height: 1.7;
-  color: #e2e8f0;
-  background: rgba(15, 23, 42, 0.6);
-  border: 1px solid rgba(139, 92, 246, 0.2);
-  border-radius: 8px;
-  padding: 16px;
-  margin: 0;
 }
 
 /* 포트폴리오 분석 결과 */
