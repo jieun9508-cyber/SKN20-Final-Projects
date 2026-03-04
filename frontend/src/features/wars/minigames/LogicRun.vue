@@ -124,7 +124,11 @@
             <div class="code-display">
               <div v-for="(line, idx) in currentRoundData?.codeBlock" :key="idx" class="code-line-display">
                 <span v-if="line.type === 'fixed'" class="code-text">{{ line.text }}</span>
-                <span v-else class="code-blank">{{ line.text }}</span>
+                <!-- [수정 2026-03-04] ________를 제거하고 앞 텍스트 + 빈칸 표시 -->
+                <template v-else>
+                  <span class="code-text">{{ line.text.replace(/_{4,}/, '').trimEnd() }}</span>
+                  <span class="code-blank-box">　　　</span>
+                </template>
               </div>
             </div>
 
@@ -141,7 +145,8 @@
                   class="btn-option"
                   :disabled="roundTimeout <= 0"
                 >
-                  {{ opt }}
+                  <!-- [수정 2026-03-04] 빈 문자열({}, [] 등) 방어: 김표로 대체 -->
+                  {{ (opt === '' || opt === null || opt === undefined) ? '(empty)' : opt }}
                 </button>
               </div>
             </div>
@@ -1553,6 +1558,7 @@ onUnmounted(() => {
 .code-line-display { margin-bottom:.4rem; }
 .code-text { color:#e0f2fe; }
 .code-blank { color:#fbbf24; background:rgba(251,191,36,.1); padding:0.2rem 0.4rem; border-radius:0.2rem; border-bottom:2px dashed #fbbf24; }
+.code-blank-box { display:inline-block; min-width:80px; border-bottom:2px dashed #fbbf24; background:rgba(251,191,36,.08); color:#fbbf24; padding:0 0.4rem; border-radius:0.2rem; margin-left:4px; vertical-align:middle; }
 
 .blank-info { padding:1rem; background:rgba(8,12,30,.9); border-top:1px solid rgba(0,240,255,.1); }
 .option-buttons { display:grid; grid-template-columns:1fr 1fr; gap:.5rem; margin-top:.5rem; }
