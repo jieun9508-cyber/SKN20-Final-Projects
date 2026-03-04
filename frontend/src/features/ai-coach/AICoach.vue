@@ -90,52 +90,60 @@
 
       <!-- 채팅 메시지 -->
       <div v-for="(msg, idx) in messages" :key="idx" class="message-block">
-        <!-- 의도 분석 결과 배지 (v2) [2026-02-23] -->
-        <div v-if="msg.intentData" class="intent-badge">
-          <span class="intent-type">{{ msg.intentData.intent_name }}</span>
-          <span class="intent-confidence">(신뢰도: {{ (msg.intentData.confidence * 100).toFixed(0) }}%)</span>
-          <span class="intent-reasoning">{{ msg.intentData.reasoning }}</span>
-        </div>
-
         <!-- 유저 메시지 -->
         <div v-if="msg.role === 'user'" class="chat-bubble user">
           {{ msg.content }}
         </div>
 
-        <!-- Agent Steps (실시간 스트리밍) -->
-        <template v-if="msg.role === 'assistant'">
-          <!-- Agent 사고 과정 + Tool 사용 -->
-          <template v-for="(item, iIdx) in msg.timeline" :key="'t-' + iIdx">
-            <!-- thinking -->
-            <div v-if="item.type === 'thinking'" class="thinking-block">
-              <span class="thinking-icon">&#129504;</span>
-              <span class="thinking-text">{{ item.message }}</span>
-              <span v-if="item.active" class="step-spinner"></span>
-            </div>
-            <!-- tool step -->
-            <div v-if="item.type === 'step'" class="step-block">
-              <div class="step-header" :class="{ 'no-result': !item.showResult }">
-                <span class="step-icon">&#128295;</span>
-                <span class="step-label">{{ item.label }}</span>
-                <span v-if="Object.keys(item.args || {}).length" class="step-args">
-                  ({{ formatArgs(item.args) }})
-                </span>
-                <span v-if="item.loading" class="step-spinner"></span>
+        <!-- 어시스턴트 응답 (배경 박스 없음, Claude 스타일) -->
+        <div v-if="msg.role === 'assistant'" class="assistant-block">
+          <!-- 분석 과정 아코디언 (의도 분석 + timeline 모두 포함, 기본 접힘) -->
+          <div v-if="msg.intentData || (msg.timeline && msg.timeline.length > 0)" class="timeline-accordion">
+            <button class="timeline-toggle" @click="msg.timelineOpen = !msg.timelineOpen">
+              <span class="timeline-toggle-arrow">{{ msg.timelineOpen ? '▼' : '▶' }}</span>
+              <span class="timeline-status-text">{{ getTimelineStatus(msg) }}</span>
+              <span v-if="msg.timeline.some(i => i.loading || i.active)" class="step-spinner"></span>
+            </button>
+            <div v-if="msg.timelineOpen" class="timeline-content">
+              <!-- 의도 분석 -->
+              <div v-if="msg.intentData" class="intent-row">
+                <span class="intent-label">의도</span>
+                <span class="intent-type">{{ msg.intentData.intent_name }}</span>
+                <span class="intent-confidence">신뢰도 {{ (msg.intentData.confidence * 100).toFixed(0) }}%</span>
+                <span class="intent-reasoning">· {{ msg.intentData.reasoning }}</span>
               </div>
-              <div v-if="item.showResult" class="step-result">
-                <span class="result-icon">&#128202;</span>
-                <pre class="result-json">{{ formatResult(item.result) }}</pre>
-              </div>
+              <!-- thinking + step 로그 -->
+              <template v-for="(item, iIdx) in msg.timeline" :key="'t-' + iIdx">
+                <div v-if="item.type === 'thinking'" class="thinking-block">
+                  <span class="thinking-icon">&#129504;</span>
+                  <span class="thinking-text">{{ item.message }}</span>
+                  <span v-if="item.active" class="step-spinner"></span>
+                </div>
+                <div v-if="item.type === 'step'" class="step-block">
+                  <div class="step-header" :class="{ 'no-result': !item.showResult }">
+                    <span class="step-icon">&#128295;</span>
+                    <span class="step-label">{{ item.label }}</span>
+                    <span v-if="Object.keys(item.args || {}).length" class="step-args">
+                      ({{ formatArgs(item.args) }})
+                    </span>
+                    <span v-if="item.loading" class="step-spinner"></span>
+                  </div>
+                  <div v-if="item.showResult" class="step-result">
+                    <span class="result-icon">&#128202;</span>
+                    <pre class="result-json">{{ formatResult(item.result) }}</pre>
+                  </div>
+                </div>
+              </template>
             </div>
-          </template>
+          </div>
 
-          <!-- 차트 렌더링 [2026-02-24] 📊 (최종답변 위에 배치) -->
+
+          <!-- 차트 렌더링 [2026-02-24] 📊 -->
           <div v-if="msg.charts && msg.charts.length > 0" class="charts-section">
             <div v-for="(chart, cIdx) in msg.charts" :key="`chart-${cIdx}`" class="chart-wrapper">
               <div class="chart-header">
                 <h4 class="chart-title">{{ chart.title }}</h4>
               </div>
-
               <!-- Bar / Line / Radar Chart -->
               <template v-if="['bar', 'line', 'radar'].includes(chart.chart_type)">
                 <canvas
@@ -145,7 +153,6 @@
                   style="max-width: 100%; height: 300px;">
                 </canvas>
               </template>
-
               <!-- Progress Chart -->
               <template v-else-if="chart.chart_type === 'progress'">
                 <div class="progress-list">
@@ -158,7 +165,6 @@
                   </div>
                 </div>
               </template>
-
               <!-- Table Chart -->
               <template v-else-if="chart.chart_type === 'table'">
                 <div class="table-wrapper">
@@ -179,10 +185,11 @@
             </div>
           </div>
 
-          <!-- 최종 답변 (스트리밍) -->
-          <div v-if="msg.showAnswer" class="chat-bubble assistant" v-html="renderMarkdown(msg.displayedContent || '')">
+          <!-- 최종 답변 -->
+          <div v-if="msg.showAnswer" class="answer-text" v-html="renderMarkdown(msg.displayedContent || '')">
           </div>
-        </template>
+        </div>
+
       </div>
 
       <!-- 로딩 (첫 이벤트 도착 전까지만 표시) -->
@@ -261,6 +268,20 @@ function flushTokenDisplay(msg) {
   displayPos = 0;
 }
 
+function getTimelineStatus(msg) {
+  // 활성 thinking 메시지 우선 표시
+  const activeThinking = [...msg.timeline].reverse().find(i => i.type === 'thinking' && i.active);
+  if (activeThinking) return activeThinking.message;
+  // 로딩 중인 step 표시
+  const loadingStep = msg.timeline.find(i => i.type === 'step' && i.loading);
+  if (loadingStep) return `${loadingStep.label} 중...`;
+  // 완료 상태
+  const stepCount = msg.timeline.filter(i => i.type === 'step').length;
+  if (stepCount > 0) return `분석 완료 · ${stepCount}단계`;
+  if (msg.intentData) return '분석 완료';
+  return '분석 중...';
+}
+
 function formatArgs(args) {
   return Object.entries(args).map(([k, v]) => `${k}: ${v}`).join(', ');
 }
@@ -314,6 +335,52 @@ function renderMarkdown(text) {
   return html;
 }
 
+// ── Chart Rendering Functions [2026-02-24] ──
+const chartInstances = new Map();
+
+function renderChartByDataId(chartData) {
+  if (!chartData || !chartData._chartId || !chartData.chart_type) return;
+  const chartId = chartData._chartId;
+  let attempts = 0;
+  const tryRender = () => {
+    const canvas = document.getElementById(chartId);
+    if (!canvas) {
+      attempts++;
+      if (attempts < 10) setTimeout(tryRender, 100);
+      else console.error(`❌ Canvas not found after retries: ${chartId}`);
+      return;
+    }
+    const existingChart = chartInstances.get(chartId);
+    if (existingChart) existingChart.destroy();
+    try {
+      const config = buildChartConfig(chartData);
+      if (config) chartInstances.set(chartId, new Chart(canvas.getContext('2d'), config));
+    } catch (err) {
+      console.error(`❌ Error rendering chart ${chartId}:`, err);
+    }
+  };
+  tryRender();
+}
+
+function buildChartConfig(chartData) {
+  const { chart_type, data } = chartData;
+  switch (chart_type) {
+    case 'bar': return {
+      type: 'bar', data: { labels: data.labels, datasets: data.datasets },
+      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: true } }, scales: { y: { max: 100, beginAtZero: true } } },
+    };
+    case 'line': return {
+      type: 'line', data: { labels: data.labels, datasets: data.datasets },
+      options: { responsive: true, maintainAspectRatio: true, plugins: { legend: { display: true } }, scales: { y: { max: 100, beginAtZero: true } } },
+    };
+    case 'radar': return {
+      type: 'radar', data: { labels: data.labels, datasets: data.datasets },
+      options: { responsive: true, maintainAspectRatio: true, scales: { r: { max: 100, beginAtZero: true } } },
+    };
+    default: return null;
+  }
+}
+
 function scrollToBottom() {
   nextTick(() => {
     if (chatArea.value) {
@@ -349,7 +416,6 @@ function handleGlobalClick() {
 
 onUnmounted(() => {
   document.removeEventListener('click', handleGlobalClick);
-  // 차트 인스턴스 정리 (메모리 릭 방지)
   chartInstances.forEach(c => c.destroy());
   chartInstances.clear();
 });
@@ -364,10 +430,11 @@ function restoreMessages(msgList) {
         role: 'assistant',
         content: msg.content,
         timeline: [],
+        timelineOpen: false,
         showAnswer: true,
         displayedContent: msg.content,
         intentData: null,
-        charts: [],
+        charts: msg.charts || [],
       });
     }
   }
@@ -385,7 +452,6 @@ async function selectConversation(id) {
     if (!resp.ok) return;
     const data = await resp.json();
     conversationId.value = data.conversation.id;
-    // 차트 정리
     chartInstances.forEach(c => c.destroy());
     chartInstances.clear();
     // 메시지 복원
@@ -425,7 +491,6 @@ async function startNewConversation() {
   } catch (e) { /* ignore */ }
   conversationId.value = null;
   messages.value = [];
-  // 기존 차트 인스턴스 정리
   chartInstances.forEach(c => c.destroy());
   chartInstances.clear();
   sidebarOpen.value = false;
@@ -524,9 +589,10 @@ async function sendMessage() {
     role: 'assistant',
     content: '',
     timeline: [],
+    timelineOpen: false, // 기본 접힘, 사용자가 클릭 시 펼침
     showAnswer: false,
     displayedContent: '',
-    intentData: null, // [2026-02-23] 의도 분석 데이터
+    intentData: null,
     charts: [], // [2026-02-24] 차트 데이터
   });
   const assistantMsg = messages.value[messages.value.length - 1];
@@ -594,20 +660,15 @@ async function sendMessage() {
               };
               scrollToBottom();
             }
-            // [2026-02-24] Chart Data 📊 (동적 차트 표시)
+            // [2026-02-24] Chart Data 📊
             else if (data.type === 'chart_data') {
-              // 각 차트에 unique ID 추가
               const chartWithId = {
                 ...data.chart,
                 _chartId: `chart-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
               };
               assistantMsg.charts.push(chartWithId);
-
-              // DOM 렌더링 후 차트 렌더링
               nextTick(() => {
-                setTimeout(() => {
-                  renderChartByDataId(chartWithId);
-                }, 150);
+                setTimeout(() => { renderChartByDataId(chartWithId); }, 150);
               });
               scrollToBottom();
             }
@@ -698,107 +759,6 @@ async function sendMessage() {
   }
 }
 
-// ── Chart Rendering Functions [2026-02-24] ──
-const chartInstances = new Map(); // 차트 인스턴스 관리
-
-function renderChartByDataId(chartData) {
-  if (!chartData || !chartData._chartId || !chartData.chart_type) return;
-
-  const chartId = chartData._chartId;
-
-  // 여러 번 시도해서 canvas 찾기 (DOM 렌더링 대기)
-  let attempts = 0;
-  const tryRender = () => {
-    const canvas = document.getElementById(chartId);
-
-    if (!canvas) {
-      attempts++;
-      if (attempts < 10) {
-        // 최대 1000ms까지 대기
-        setTimeout(tryRender, 100);
-      } else {
-        console.error(`❌ Canvas not found after retries: ${chartId}`);
-      }
-      return;
-    }
-
-    // 기존 차트 인스턴스 제거
-    const existingChart = chartInstances.get(chartId);
-    if (existingChart) existingChart.destroy();
-
-    try {
-      const ctx = canvas.getContext('2d');
-      const config = buildChartConfig(chartData);
-
-      if (config) {
-        const chartInstance = new Chart(ctx, config);
-        chartInstances.set(chartId, chartInstance);
-        console.log(`✅ Chart rendered successfully: ${chartData.chart_type}`, chartData.title);
-      }
-    } catch (err) {
-      console.error(`❌ Error rendering chart ${chartId}:`, err);
-    }
-  };
-
-  tryRender();
-}
-
-function buildChartConfig(chartData) {
-  const { chart_type, data } = chartData;
-
-  switch (chart_type) {
-    case 'bar':
-      return {
-        type: 'bar',
-        data: {
-          labels: data.labels,
-          datasets: data.datasets,
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: true,
-          plugins: {
-            legend: { display: true },
-          },
-          scales: {
-            y: { max: 100, beginAtZero: true },
-          },
-        },
-      };
-
-    case 'line':
-      return {
-        type: 'line',
-        data: {
-          labels: data.labels,
-          datasets: data.datasets,
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: true,
-          plugins: { legend: { display: true } },
-          scales: { y: { max: 100, beginAtZero: true } },
-        },
-      };
-
-    case 'radar':
-      return {
-        type: 'radar',
-        data: {
-          labels: data.labels,
-          datasets: data.datasets,
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: true,
-          scales: { r: { max: 100, beginAtZero: true } },
-        },
-      };
-
-    default:
-      return null;
-  }
-}
 </script>
 
 <style scoped>
@@ -1216,29 +1176,175 @@ function buildChartConfig(chartData) {
   box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
 }
 
-.chat-bubble.assistant {
+/* ===== Assistant Block (Claude 스타일 - 배경 없음) ===== */
+.assistant-block {
   align-self: flex-start;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--text);
-  border-bottom-left-radius: 2px;
-  border: 1px solid var(--glass-border);
+  max-width: 85%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
-.chat-bubble.assistant :deep(h3),
-.chat-bubble.assistant :deep(h4) {
+/* ===== Charts [2026-02-24] ===== */
+.charts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 600px;
+  width: 100%;
+}
+
+.chart-wrapper {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 1rem;
+  animation: chartSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes chartSlideIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.chart-header {
+  margin-bottom: 1rem;
+}
+
+.chart-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--secondary);
+  margin: 0;
+}
+
+.chart-canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Progress Bar */
+.progress-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.progress-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.progress-label {
+  min-width: 80px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  transition: width 0.3s ease;
+}
+
+.progress-percent {
+  min-width: 45px;
+  text-align: right;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Table */
+.table-wrapper {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.data-table th {
+  background: rgba(99, 102, 241, 0.1);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  font-weight: 600;
+  color: var(--primary);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.data-table td {
+  padding: 0.5rem 0.75rem;
+  color: var(--text);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.answer-text {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.answer-text :deep(h3),
+.answer-text :deep(h4) {
   color: var(--secondary);
   margin: 0.5rem 0 0.25rem;
   font-family: 'Outfit', sans-serif;
 }
-.chat-bubble.assistant :deep(strong) {
-  color: #fff;
+.answer-text :deep(strong) { color: #fff; }
+.answer-text :deep(ul) { padding-left: 1.25rem; margin: 0.25rem 0; }
+.answer-text :deep(li) { margin: 0.15rem 0; }
+
+/* intent row inside accordion */
+.intent-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 0.35rem 0.5rem;
+  background: rgba(99, 102, 241, 0.05);
+  border-radius: 6px;
+  font-size: 0.75rem;
 }
-.chat-bubble.assistant :deep(ul) {
-  padding-left: 1.25rem;
-  margin: 0.25rem 0;
+.intent-label {
+  color: var(--text-muted);
+  font-weight: 600;
 }
-.chat-bubble.assistant :deep(li) {
-  margin: 0.15rem 0;
+.intent-type {
+  color: var(--primary);
+  font-weight: 700;
+}
+.intent-confidence {
+  color: #4ade80;
+  font-size: 0.7rem;
+}
+.intent-reasoning {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* intent tag in accordion header (collapsed view) */
+.timeline-intent-tag {
+  color: var(--secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  opacity: 0.85;
 }
 
 /* ===== Agent Thinking ===== */
@@ -1246,12 +1352,10 @@ function buildChartConfig(chartData) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  align-self: flex-start;
-  padding: 0.45rem 0.85rem;
+  padding: 0.35rem 0.6rem;
   background: rgba(255, 255, 255, 0.03);
-  border-left: 3px solid rgba(99, 102, 241, 0.4);
-  border-radius: 0 8px 8px 0;
-  animation: stepSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  border-left: 2px solid rgba(99, 102, 241, 0.35);
+  border-radius: 0 6px 6px 0;
 }
 
 .thinking-icon {
@@ -1266,9 +1370,7 @@ function buildChartConfig(chartData) {
 
 /* ===== Agent Steps ===== */
 .step-block {
-  align-self: flex-start;
-  max-width: 85%;
-  animation: stepSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  width: 100%;
 }
 
 @keyframes stepSlideIn {
@@ -1365,15 +1467,68 @@ function buildChartConfig(chartData) {
   overflow-y: auto;
 }
 
+/* ===== Timeline Accordion ===== */
+.timeline-accordion {
+  width: 100%;
+}
+
+.timeline-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.8rem 1.2rem;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 12px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: left;
+}
+.timeline-toggle:hover {
+  background: rgba(99, 102, 241, 0.14);
+  color: var(--text);
+}
+
+.timeline-status-text {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.timeline-toggle-arrow {
+  font-size: 0.7rem;
+  opacity: 0.6;
+}
+
+.timeline-content {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.4rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  animation: timelineExpand 0.2s ease-out;
+}
+
+@keyframes timelineExpand {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ===== Loading ===== */
 .loading-indicator {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
   align-self: flex-start;
-  padding: 0.6rem 1rem;
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
+  padding: 0.8rem 1.2rem;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.18);
   border-radius: 12px;
 }
 
@@ -1382,8 +1537,8 @@ function buildChartConfig(chartData) {
   gap: 4px;
 }
 .loading-dots span {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   background: var(--primary);
   border-radius: 50%;
   animation: dotPulse 1.2s infinite;
@@ -1397,8 +1552,10 @@ function buildChartConfig(chartData) {
 }
 
 .loading-text {
-  font-size: 0.8rem;
+  font-size: 0.9rem;
   color: var(--text-muted);
+  font-family: 'Outfit', sans-serif;
+  font-weight: 500;
 }
 
 /* ===== Input Area (style.css chat-input-wrapper 패턴) ===== */
@@ -1498,119 +1655,4 @@ function buildChartConfig(chartData) {
   font-style: italic;
 }
 
-/* ===== Charts [2026-02-24] ===== */
-.charts-section {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  align-self: flex-start;
-  max-width: 600px;
-  width: 100%;
-}
-
-.chart-wrapper {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  padding: 1rem;
-  animation: chartSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes chartSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.chart-header {
-  margin-bottom: 1rem;
-}
-
-.chart-title {
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--secondary);
-  margin: 0;
-}
-
-.chart-canvas {
-  max-width: 100%;
-  height: auto;
-}
-
-/* Progress Bar */
-.progress-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.progress-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.progress-label {
-  min-width: 80px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.progress-bar {
-  flex: 1;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--primary), var(--secondary));
-  transition: width 0.3s ease;
-}
-
-.progress-percent {
-  min-width: 45px;
-  text-align: right;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-/* Table */
-.table-wrapper {
-  overflow-x: auto;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-.data-table th {
-  background: rgba(99, 102, 241, 0.1);
-  padding: 0.5rem 0.75rem;
-  text-align: left;
-  font-weight: 600;
-  color: var(--primary);
-  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
-}
-
-.data-table td {
-  padding: 0.5rem 0.75rem;
-  color: var(--text);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.data-table tbody tr:hover {
-  background: rgba(255, 255, 255, 0.03);
-}
 </style>
