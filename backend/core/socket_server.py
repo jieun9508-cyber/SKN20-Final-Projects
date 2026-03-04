@@ -409,6 +409,7 @@ async def draw_submit(sid, data):
                 print(f"⚠️ [ArchDraw] Skipping gameover emit — room already in new game phase: {room.get('phase')}")
 
             # 스냅샷 점수 기준으로 전적 저장 (await 중 점수 변조 방지)
+            print(f"📊 [ArchDraw] DB Save: P1(uid={p1.get('user_id')}, score={p1_snap['score']}) vs P2(uid={p2.get('user_id')}, score={p2_snap['score']})")
             if p1_snap['score'] > p2_snap['score']:
                 await update_battle_record(p1.get('user_id'), 'win')
                 await update_battle_record(p2.get('user_id'), 'lose')
@@ -712,6 +713,7 @@ async def bubble_game_over(sid, data):
         players = bubble_rooms[room_id]['players']
         for p in players:
             result = 'lose' if p['sid'] == sid else 'win'
+            print(f"📊 [BugBubble] DB Save: uid={p.get('user_id')}, result={result}")
             await update_battle_record(p.get('user_id'), result)
 
 # 공통 채팅 및 기타 이벤트 유지 (chat_message, update_role 등 기존 코드와 동일)

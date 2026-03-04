@@ -1,5 +1,5 @@
 <template>
-  <div class="bubble-game" :class="{ 'screen-shake': shaking }">
+  <div class="bubble-game" :class="{ 'screen-shake': shaking, 'bubble-flash': bubbleFlash }">
     <div class="crt-lines"></div>
 
     <!-- ===== JOIN SCREEN ===== -->
@@ -163,7 +163,21 @@
         </div>
       </div>
 
+      <!-- 상대 공격 경고 알림 -->
+      <transition name="alert-slide">
+        <div v-if="incomingAlert" class="incoming-alert">
+          <span class="alert-text">{{ incomingAlert }}</span>
+        </div>
+      </transition>
+
       <div class="monster-overlay">
+        <!-- 수신 버블: 날아와서 터짐 -->
+        <div v-for="b in incomingBubbles" :key="'ib'+b.id" class="incoming-bubble"
+          :class="{ 'ib-flying': b.phase === 'flying', 'ib-pop': b.phase === 'pop' }"
+          :style="{ '--target-x': b.targetX + 'px', '--target-y': b.targetY + 'px', '--start-y': b.y + 'px' }">
+          <span class="ib-shell">🫧</span>
+          <span class="ib-inner">👾</span>
+        </div>
         <div v-for="m in activeMonsters" :key="m.id" class="monster-bug"
           :style="{ left: m.x + 'px', top: m.y + 'px', fontSize: m.size + 'rem' }">👾</div>
         <transition-group name="bubble-fly" tag="div">
@@ -218,7 +232,7 @@ const termBody = ref(null)
 const activeMonsters = ref([])
 const flyingBubbles = ref([])
 const comboPops = ref([])
-const maxMonsters = 25
+const maxMonsters = 12
 const opponentMonsterCount = ref(0)
 const isWinner = ref(false)
 const combo = ref(0)
@@ -226,6 +240,9 @@ const bestCombo = ref(0)
 const totalSolved = ref(0)
 const totalBubblesSent = ref(0)
 const shaking = ref(false)
+const incomingAlert = ref('')  // 상대 공격 경고
+const bubbleFlash = ref(false)
+let alertTimer = null
 let flyBubbleId = 0
 let combPopId = 0
 let animFrameId = null
@@ -318,7 +335,7 @@ function getChoiceClass(idx) {
 }
 
 function selectChoice(idx) {
-  if (answerState.value !== 'idle') return
+  if (answerState.value !== 'idle' || gamePhase.value !== 'playing') return
   selectedChoiceIdx.value = idx
   const choice = currentProblem.value?.choices?.[idx]
   if (!choice) return
@@ -355,6 +372,51 @@ function selectChoice(idx) {
   }, 1200)
 }
 
+// 상대 버블 날아와서 터지면서 몬스터 스폰
+const incomingBubbles = ref([])
+let incomingBubbleId = 0
+
+function spawnIncomingBubble(monsterCount) {
+  const id = ++incomingBubbleId
+  const targetX = 100 + Math.random() * (window.innerWidth * 0.5)
+  const targetY = 150 + Math.random() * (window.innerHeight * 0.4)
+  incomingBubbles.value.push({ id, x: window.innerWidth + 50, y: targetY, targetX, targetY, phase: 'flying' })
+
+  // 0.7초 후 도작 → 터짐
+  setTimeout(() => {
+    const b = incomingBubbles.value.find(b => b.id === id)
+    if (b) b.phase = 'pop'
+    // 화면 빨간 플래시
+    bubbleFlash.value = true
+    setTimeout(() => { bubbleFlash.value = false }, 400)
+    // 터진 위치에서 몬스터 스폰 (버블 위치 기준)
+    for (let i = 0; i < monsterCount; i++) {
+      activeMonsters.value.push({
+        id: Date.now() + Math.random(),
+        x: targetX + (Math.random() - 0.5) * 80,
+        y: targetY + (Math.random() - 0.5) * 80,
+        dx: (Math.random() - 0.5) * 3, dy: (Math.random() - 0.5) * 3,
+        size: 1.5 + Math.random() * 0.8
+      })
+    }
+    // 게임오버 판정
+    if (activeMonsters.value.length >= maxMonsters && gamePhase.value === 'playing') {
+      gamePhase.value = 'gameover-pending'
+      bs.emitGameOver(currentRoomId.value)
+    }
+    // 0.6초 후 버블 제거
+    setTimeout(() => {
+      incomingBubbles.value = incomingBubbles.value.filter(b => b.id !== id)
+    }, 600)
+  }, 700)
+}
+
+function showAlert(msg) {
+  incomingAlert.value = msg
+  if (alertTimer) clearTimeout(alertTimer)
+  alertTimer = setTimeout(() => { incomingAlert.value = '' }, 1500)
+}
+
 function nextProblem() {
   if (allProblems.value.length === 0) return
   currentProblemIndex.value = (currentProblemIndex.value + 1) % allProblems.value.length
@@ -384,7 +446,10 @@ function spawnMonsters(count) {
       size: 1.5 + Math.random() * 0.8
     })
   }
-  if (activeMonsters.value.length >= maxMonsters) bs.emitGameOver(currentRoomId.value)
+  if (activeMonsters.value.length >= maxMonsters && gamePhase.value === 'playing') {
+    gamePhase.value = 'gameover-pending'  // 즉시 입력 차단
+    bs.emitGameOver(currentRoomId.value)
+  }
 }
 
 function startGameLoop() {
@@ -439,8 +504,17 @@ onMounted(() => {
     }, 800)
   }
 
-  bs.onReceiveMonster.value = () => spawnMonsters(1)
-  bs.onReceiveFever.value = (data) => spawnMonsters(data.count || 3)
+  bs.onReceiveMonster.value = () => {
+    showAlert('⚠️ 상대 공격!')
+    spawnIncomingBubble(1)
+  }
+  bs.onReceiveFever.value = (data) => {
+    const cnt = data.count || 3
+    showAlert(`🔥 FEVER 공격! 몬스터 ${cnt}마리!`)
+    shaking.value = true
+    setTimeout(() => shaking.value = false, 600)
+    spawnIncomingBubble(cnt)
+  }
 
   bs.onMonsterSync.value = (data) => {
     if (!data?.counts || !bs.socket.value) return
@@ -648,4 +722,44 @@ onUnmounted(() => {
 .btn-retry { flex:1; max-width:180px; padding:.6rem; font-family:'Orbitron',sans-serif; font-size:.75rem; font-weight:700; background:transparent; border:2px solid #00f0ff; color:#00f0ff; border-radius:.6rem; cursor:pointer; transition:all .2s }
 .btn-retry:hover { background:rgba(0,240,255,.1) }
 .btn-exit { flex:1; max-width:180px; padding:.6rem; font-family:'Orbitron',sans-serif; font-size:.75rem; font-weight:700; background:transparent; border:1px solid #334155; color:#64748b; border-radius:.6rem; cursor:pointer }
+
+/* 수신 버블 애니메이션 */
+.incoming-bubble { position:absolute; z-index:35; font-size:5rem; pointer-events:none }
+.ib-shell { position:relative; z-index:1; filter:drop-shadow(0 0 20px rgba(0,240,255,.6)) }
+.ib-inner { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:2.2rem; z-index:2 }
+.ib-flying { animation: ib-fly .7s cubic-bezier(.2,.8,.3,1) forwards }
+.ib-pop .ib-shell { animation: ib-burst-shell .6s ease-out forwards }
+.ib-pop .ib-inner { animation: ib-burst-monster .6s ease-out forwards }
+.ib-pop::after { content:''; position:absolute; top:50%; left:50%; width:200px; height:200px; transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle, rgba(255,45,117,.5) 0%, rgba(255,45,117,0) 70%); animation: ib-shockwave .6s ease-out forwards; pointer-events:none }
+@keyframes ib-fly {
+  0% { right:-80px; top:var(--start-y); opacity:0; transform:scale(.5) }
+  20% { opacity:1; transform:scale(1.1) }
+  100% { left:var(--target-x); top:var(--target-y); opacity:1; transform:scale(1) }
+}
+@keyframes ib-burst-shell {
+  0% { transform:scale(1); opacity:1 }
+  30% { transform:scale(2.2); opacity:1; filter:brightness(3) drop-shadow(0 0 40px rgba(255,45,117,1)) }
+  100% { transform:scale(3); opacity:0 }
+}
+@keyframes ib-burst-monster {
+  0% { transform:translate(-50%,-50%) scale(1); opacity:1 }
+  30% { transform:translate(-50%,-50%) scale(1.8); opacity:1 }
+  100% { transform:translate(-50%,-50%) scale(.5); opacity:0 }
+}
+@keyframes ib-shockwave {
+  0% { width:0; height:0; opacity:1 }
+  100% { width:300px; height:300px; opacity:0 }
+}
+/* 버블 터질 때 화면 빨간 플래시 */
+.bubble-flash::after { content:''; position:fixed; inset:0; background:rgba(255,45,117,.15); z-index:9000; pointer-events:none; animation:bflash .4s ease-out forwards }
+@keyframes bflash { 0%{opacity:1} 100%{opacity:0} }
+
+/* 상대 공격 경고 알림 */
+.incoming-alert { position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:50; background:rgba(255,45,117,.15); border:2px solid #ff2d75; border-radius:12px; padding:.5rem 1.5rem; backdrop-filter:blur(8px); box-shadow:0 0 30px rgba(255,45,117,.3); animation:alert-pulse .4s ease infinite alternate }
+.alert-text { font-family:'Orbitron',sans-serif; font-size:.85rem; font-weight:700; color:#ff2d75; letter-spacing:1px; text-shadow:0 0 10px rgba(255,45,117,.6) }
+@keyframes alert-pulse { from{box-shadow:0 0 15px rgba(255,45,117,.2)} to{box-shadow:0 0 40px rgba(255,45,117,.5)} }
+.alert-slide-enter-active { transition:all .3s ease-out }
+.alert-slide-leave-active { transition:all .4s ease-in }
+.alert-slide-enter-from { opacity:0; transform:translateX(-50%) translateY(-20px) }
+.alert-slide-leave-to { opacity:0; transform:translateX(-50%) translateY(-10px) }
 </style>
