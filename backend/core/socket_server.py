@@ -299,16 +299,17 @@ async def draw_submit(sid, data):
     room = draw_rooms[room_id]
     player = next((p for p in room['players'] if p['sid'] == sid), None)
     if player:
-        # [수정: 클라이언트 점수 검증] 체크리스트 기반으로 서버가 직접 점수 계산
+        # [수정 2026-03-05] 100점 만점 체계로 변경
+        # 체크리스트 60점 + 시간보너스 10점 + 완료보너스 20점 + 콤보보너스 10점
         checks = data.get('checks', [])
         hit = sum(1 for c in checks if c.get('ok'))
         total = len(checks) if checks else 1
         ratio = hit / total
-        # 점수 공식: 체크 40점 + 달성보너스 100점 + (남은시간 × 2) + (콤보 × 20)
-        # 단, 클라이언트가 보낸 timeLeft·combo 는 참고값 — 최대치 클램핑으로 어뷰징 방지
-        time_bonus = min(data.get('time_left', 0), 90) * 2  # 최대 180점 (90초 기준)
-        combo_bonus = min(data.get('combo', 0), 10) * 20    # 최대 200점 (콤보 10x 상한)
-        pts = hit * 40 + (100 if ratio >= 0.8 else 0) + time_bonus + combo_bonus
+        check_score = round((hit / total) * 60)                      # 최대 60점
+        time_bonus = round((min(data.get('time_left', 0), 90) / 90) * 10)  # 최대 10점
+        complete_bonus = 20 if ratio == 1.0 else 0                   # 전부 통과 시 +20점
+        combo_bonus = min(data.get('combo', 0), 5) * 2               # 최대 10점 (5콤보 상한)
+        pts = check_score + time_bonus + complete_bonus + combo_bonus
         
         player['score'] += pts
         player['last_pts'] = pts

@@ -415,6 +415,7 @@ import { useGameStore } from '@/stores/game'
 import { useAuthStore } from '@/stores/auth' // [추가: 2026-03-03] 유저 연동 복구
 import { useDrawSocket } from '../composables/useDrawSocket'
 import { addBattleRecord } from '../useBattleRecord.js'
+import axios from 'axios'
 
 const router = useRouter()
 const ds = useDrawSocket()
@@ -1051,6 +1052,21 @@ function saveResultAndExit() {
   if (myScore.value > oppScore.value) addBattleRecord(name, 'win')
   else if (myScore.value < oppScore.value) addBattleRecord(name, 'lose')
   else addBattleRecord(name, 'draw')
+
+  // [2026-03-05] 명예의 전당 연동: Wars 점수 제출
+  if (auth.isLoggedIn) {
+    axios.post('/api/core/wars/submit-score/', {
+      game_type: 'arch_draw',
+      score: myScore.value,
+      submitted_data: {
+        mission_title: curQ.value?.title || '',
+        checks_passed: checkItems.value.filter(c => c.ok).length,
+        checks_total: checkItems.value.length,
+        combo: combo.value,
+        result: myScore.value > oppScore.value ? 'win' : myScore.value === oppScore.value ? 'draw' : 'lose',
+      }
+    }).catch(err => console.warn('[Wars] ArchDraw Score submit failed:', err.message))
+  }
 }
 
 function exitGame() {
