@@ -27,7 +27,7 @@ export function useDrawSocket() {
   const onChaosRecovered = ref(null) // [추가 2026-03-03] 장애 복구 알림
   const onGameOver = ref(null)
 
-  function connect(roomId, userName, userId) {
+  function connect(roomId, userName, userId, avatarUrl) {
     if (socket.value) return
 
     // [수정일: 2026-03-01] 소켓 URL 결정 로직 수정
@@ -50,7 +50,7 @@ export function useDrawSocket() {
     socket.value.on('connect', () => {
       connected.value = true
       // [수정일: 2026-03-03] DB 연동을 위해 user_id 포함하여 전송
-      socket.value.emit('draw_join', { room_id: roomId, user_name: userName, user_id: userId })
+      socket.value.emit('draw_join', { room_id: roomId, user_name: userName, user_id: userId, avatar_url: avatarUrl || '' })
     })
 
     socket.value.on('disconnect', () => { connected.value = false })

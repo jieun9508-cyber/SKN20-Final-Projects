@@ -12,25 +12,44 @@
     <!-- ===== LOBBY: 대기 ===== -->
     <div v-if="phase === 'lobby'" class="intro-screen">
       <div class="intro-box">
+        <div class="intro-badge">SYSTEM ARCHITECTURE BATTLE</div>
         <h1 class="logo glitch" data-text="BLUEPRINT">BLUEPRINT</h1>
         <p class="sub-logo">실시간 시스템 설계 서바이벌</p>
-        <div class="lobby-players">
-          <div v-for="(p,i) in ds.roomPlayers.value" :key="i" class="lp"><span class="lp-icon">👤</span><span>{{ p.name }}</span></div>
-          <div v-if="ds.roomPlayers.value.length < 2" class="lp waiting"><span class="lp-icon blink">⏳</span><span>대기 중...</span></div>
-        </div>
-        <div class="lobby-room-manager">
-          <div class="room-id-label">ROOM ID</div>
+
+        <div class="team-select">
+          <p class="team-label" style="margin-top: 0.5rem;">방 관리 (1대1 경쟁)</p>
           <div class="room-input-group">
             <input v-model="inputRoomId" placeholder="방 번호 입력..." class="room-input" @keyup.enter="joinCustomRoom" />
-            <button @click="joinCustomRoom" class="btn-join">JOIN</button>
+            <button @click="joinCustomRoom" class="btn-join">입장/변경</button>
           </div>
-          <div class="current-room-info">현재 접속: <span class="neon-c">{{ currentRoomId }}</span></div>
-          <!-- [빌드버전: 2026-02-26 05:30] 캐시 확인용 태그 -->
-          <div style="font-size:10px; color:#334155; margin-top:5px;">BUILD: 2026-02-26-0530-FINAL</div>
+
+          <div v-if="currentRoomId" class="battle-lobby-info">
+            <div class="battle-lobby-card">
+              <template v-if="ds.roomPlayers.value[0]">
+                <img :src="ds.roomPlayers.value[0].avatar_url || '/image/duck_idle.png'" class="lobby-avatar" />
+                <div class="lobby-name p1">{{ ds.roomPlayers.value[0].name }}</div>
+              </template>
+              <div v-else class="lobby-slot-empty">P1 대기중...</div>
+            </div>
+
+            <div class="battle-vs">VS</div>
+
+            <div class="battle-lobby-card">
+              <template v-if="ds.roomPlayers.value[1]">
+                <img :src="ds.roomPlayers.value[1].avatar_url || '/image/duck_idle.png'" class="lobby-avatar" />
+                <div class="lobby-name p2">{{ ds.roomPlayers.value[1].name }}</div>
+              </template>
+              <div v-else class="lobby-slot-empty">
+                <div class="hourglass">⏳</div>
+                대기 중...
+              </div>
+            </div>
+          </div>
         </div>
+
         <div class="lobby-info" v-if="!ds.connected.value">연결 중...</div>
-        <div class="lobby-info" v-else-if="!ds.isReady.value">상대를 기다리는 중... ({{ ds.roomPlayers.value.length }}/2)</div>
         <button v-if="ds.isReady.value" @click="beginGame" class="btn-start blink-border">▶ GAME START</button>
+        <button v-else-if="!ds.connected.value" class="btn-start" disabled>연결 중...</button>
         <div class="game-guide-container">
           <div class="guide-item">
             <div class="gi-num">01</div>
@@ -133,6 +152,19 @@
                 <span class="ch-val">{{ chaosData?.hint }}</span>
               </div>
             </div>
+            <!-- ✅ [Agent 행동 반영] Chaos 채점 조건 UI 표시 -->
+            <div class="chaos-score-condition" v-if="chaosData?.required_component">
+              <div class="csc-row csc-bonus">
+                <span class="csc-ico">✅</span>
+                <span><strong>{{ chaosData.required_component.toUpperCase() }}</strong> 배치 시</span>
+                <span class="csc-pts">+20점</span>
+              </div>
+              <div class="csc-row csc-penalty">
+                <span class="csc-ico">❌</span>
+                <span>미배치 시</span>
+                <span class="csc-pts">-10점</span>
+              </div>
+            </div>
             <div class="chaos-footer">
               <button class="btn-chaos-ack" @click="acknowledgeChaos">UNDERSTOOD</button>
             </div>
@@ -153,7 +185,7 @@
           </div>
           <!-- Palette -->
           <div class="palette">
-            <div v-for="c in paletteComps" :key="c.id" class="pal-chip" :class="{ used: usedIds.includes(c.id) }" draggable="true" @dragstart="onDragStart($event,c)">
+            <div v-for="c in paletteComps" :key="c.id" class="pal-chip" :class="{ used: usedIds.includes(c.id), 'coach-highlight': highlightedComponent === c.id }" draggable="true" @dragstart="onDragStart($event,c)">
               <span class="pi">{{ c.icon }}</span><span class="pn">{{ c.name }}</span>
             </div>
           </div>
@@ -468,6 +500,10 @@ const totalItems = computed(() => Object.values(inventory.value).reduce((a, b) =
 const chaosActive = ref(false)
 const chaosData = ref(null)
 
+// ✅ [Agent 행동] CoachAgent 팔레트 하이라이트 상태
+const highlightedComponent = ref(null)
+let highlightTimer = null
+
 const ITEM_TYPES = [
   { id: 'ink', name: 'INK SPLASH', icon: '🖋️', effect: 'ink', key: '1' },
   { id: 'shake', name: 'EARTHQUAKE', icon: '🫨', effect: 'shake', key: '2' },
@@ -598,7 +634,7 @@ onMounted(async () => {
 
   console.log(`[ArchDraw] Connecting to Room: ${currentRoomId.value} as ${userName.value}`)
   // [수정일: 2026-03-03] DB 연동을 위해 userId 추가 전달
-  ds.connect(currentRoomId.value, userName.value, userId.value)
+  ds.connect(currentRoomId.value, userName.value, userId.value, auth.userAvatarUrl)
   window.addEventListener('keydown', handleGlobalKey)
 
   // CoachHint 리스너 — 소켓 준비 후 등록
@@ -641,10 +677,19 @@ ds.onCoachHint.value = (data) => {
   console.log('💡 [ArchDraw] Coach Hint Received:', data)
   if (data && data.message) {
     coachMsg.value = data.message
-    // 8초 후 힌트 메시지 숨김
     setTimeout(() => {
       if (coachMsg.value === data.message) coachMsg.value = ''
     }, 8000)
+
+    // ✅ [Agent 행동] 팔레트 하이라이트 — Coach가 직접 지정한 컴포넌트 꺜빡임
+    if (data.highlight_component) {
+      if (highlightTimer) clearTimeout(highlightTimer)
+      highlightedComponent.value = data.highlight_component
+      console.log('🟢 [Coach] 팔레트 하이라이트:', data.highlight_component)
+      highlightTimer = setTimeout(() => {
+        highlightedComponent.value = null
+      }, 6000)
+    }
   }
 }
 
@@ -684,7 +729,7 @@ function joinCustomRoom() {
   // 기존 방 퇴장 후 새 방 입장
   ds.disconnect(currentRoomId.value)
   currentRoomId.value = newRoomId
-  ds.connect(newRoomId, userName.value, userId.value)
+  ds.connect(newRoomId, userName.value, userId.value, auth.userAvatarUrl)
   
   spawnPopText(`ROOM ${newRoomId} 입장!`, '#00f0ff')
 }
@@ -854,6 +899,7 @@ ds.onRoundStart.value = (data) => {
   phase.value = 'play';
   timeLeft.value = 90;
   coachMsg.value = '';
+  highlightedComponent.value = null;  // ✅ 라운드 시작 시 하이라이트 초기화
   nodes.value = [];
   arrows.value = [];
   selectedNode.value = null;
@@ -1304,6 +1350,33 @@ watch(() => ds.roomPlayers.value, (players) => {
   background: #ff2d75;
   color: #fff;
 }
+/* ✅ [Agent 행동 반영] Chaos 채점 조건 UI */
+.chaos-score-condition {
+  margin: 0 25px 15px;
+  padding: 12px 15px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.csc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+.csc-ico { font-size: 14px; flex-shrink: 0; }
+.csc-row span:nth-child(2) { flex: 1; }
+.csc-pts {
+  font-family: 'Orbitron', sans-serif;
+  font-weight: 900;
+  font-size: 14px;
+}
+.csc-bonus .csc-pts { color: #39ff14; text-shadow: 0 0 8px rgba(57,255,20,0.6); }
+.csc-bonus strong { color: #fff; }
+.csc-penalty .csc-pts { color: #ff2d75; }
 .severity-critical { border-color: #ff0000; box-shadow: 0 0 40px rgba(255,0,0,0.5); }
 .severity-critical .chaos-header { background: #ff0000; animation: chaosCriticalPulse 1s infinite; }
 @keyframes chaosCriticalPulse { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; } }
@@ -1397,6 +1470,19 @@ watch(() => ds.roomPlayers.value, (players) => {
 .pal-chip{display:flex;align-items:center;gap:.2rem;padding:.25rem .45rem;border-radius:.3rem;background:#0a0f1e;border:1.5px solid #1e293b;color:#cbd5e1;font-size:.7rem;cursor:grab;transition:all .15s;user-select:none}
 .pal-chip:hover{border-color:#00f0ff;transform:translateY(-1px);box-shadow:0 3px 8px rgba(0,240,255,.1)}
 .pal-chip.used{opacity:.4}
+/* ✅ [Agent 행동] CoachAgent 팔레트 하이라이트 */
+.pal-chip.coach-highlight{
+  border-color:#39ff14;
+  box-shadow:0 0 14px rgba(57,255,20,0.7),0 0 4px rgba(57,255,20,0.4) inset;
+  animation:coachPulse .7s infinite alternate;
+  transform:scale(1.05);
+  z-index:10;
+  position:relative;
+}
+@keyframes coachPulse{
+  from{box-shadow:0 0 8px rgba(57,255,20,0.5);border-color:rgba(57,255,20,.6)}
+  to{box-shadow:0 0 22px rgba(57,255,20,1);border-color:#39ff14}
+}
 .pi{font-size:.8rem}.pn{font-weight:600}
 
 /* CANVAS */
@@ -1419,6 +1505,34 @@ watch(() => ds.roomPlayers.value, (players) => {
 }
 
 .intro-screen{position:absolute;inset:0;background:#050814;display:flex;align-items:center;justify-content:center;z-index:1000}
+
+/* ===== LOBBY: 아바타 카드 스타일 (LogicRun 동일) ===== */
+.intro-box { text-align:center; max-width:580px; width:100%; background:rgba(8,12,30,.9); border:2px solid #00f0ff; border-radius:1.5rem; padding:2.5rem 2rem; box-shadow:0 0 60px rgba(0,240,255,.12); }
+.intro-badge { display:inline-block; font-size:.6rem; letter-spacing:3px; font-weight:700; padding:4px 14px; background:rgba(0,240,255,.08); border:1px solid rgba(0,240,255,.25); border-radius:4px; color:#00f0ff; margin-bottom:1rem; }
+.team-select { margin-bottom:1rem; }
+.team-label { font-size:.7rem; font-weight:700; color:#475569; letter-spacing:2px; margin-bottom:.6rem; }
+.room-input-group { display:flex; gap:8px; justify-content:center; margin-bottom:12px; }
+.room-input { background:rgba(0,0,0,.4); border:1px solid #1e293b; color:#fff; padding:8px 12px; border-radius:6px; font-family:'Orbitron',sans-serif; font-size:.9rem; width:140px; text-align:center; outline:none; }
+.room-input:focus { border-color:#00f0ff; box-shadow:0 0 10px rgba(0,240,255,.2); }
+.btn-join { background:rgba(0,240,255,.1); border:1px solid rgba(0,240,255,.3); color:#00f0ff; padding:8px 16px; border-radius:6px; font-family:'Orbitron',sans-serif; font-size:.8rem; font-weight:700; cursor:pointer; transition:all .2s; }
+.btn-join:hover { background:#00f0ff; color:#030712; }
+.battle-lobby-info { display:flex; align-items:center; justify-content:center; gap:2rem; margin-top:1.5rem; padding:1.5rem; background:rgba(10,15,30,.5); border-radius:1rem; border:1px solid rgba(0,240,255,.1); }
+.battle-lobby-card { display:flex; flex-direction:column; align-items:center; gap:.8rem; width:100px; }
+.lobby-avatar { width:64px; height:64px; border-radius:50%; border:2px solid rgba(0,240,255,.3); box-shadow:0 0 15px rgba(0,240,255,.1); background:rgba(0,0,0,.5); object-fit:cover; }
+.lobby-name { font-family:'Orbitron',sans-serif; font-size:.9rem; font-weight:700; letter-spacing:1px; }
+.lobby-name.p1 { color:#00f0ff; text-shadow:0 0 5px rgba(0,240,255,.5); }
+.lobby-name.p2 { color:#ffe600; text-shadow:0 0 5px rgba(255,230,0,.5); }
+.lobby-slot-empty { display:flex; flex-direction:column; align-items:center; gap:.5rem; font-size:.8rem; color:#64748b; font-weight:600; text-align:center; }
+.hourglass { font-size:1.2rem; animation:float 2s ease-in-out infinite; }
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+.battle-vs { font-family:'Orbitron',sans-serif; font-size:1.5rem; font-weight:900; color:#475569; font-style:italic; letter-spacing:2px; }
+.btn-start { margin-top:1rem; padding:.9rem 3rem; font-family:'Orbitron',sans-serif; font-size:1rem; font-weight:900; background:transparent; border:2px solid #ffe600; color:#ffe600; border-radius:.75rem; cursor:pointer; letter-spacing:3px; transition:all .2s; }
+.btn-start:hover { background:rgba(255,230,0,.08); box-shadow:0 0 30px rgba(255,230,0,.3); transform:scale(1.04); }
+.btn-start:disabled { border-color:#334155; color:#475569; cursor:not-allowed; transform:none; }
+.blink-border { animation:blinkB 1.5s infinite; }
+@keyframes blinkB { 50%{border-color:rgba(255,230,0,.3)} }
+.lobby-info { margin-top:.75rem; font-size:.85rem; color:#64748b; }
+.sub-logo { color:#64748b; letter-spacing:1px; margin-bottom:1.5rem; font-size:.95rem; }
 .canvas-hint,.opp-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#1e293b;font-size:.85rem;pointer-events:none}
 .arrow-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .aline{stroke:#00f0ff;stroke-width:2;opacity:.7}.aline.drawing{stroke-dasharray:6 4;opacity:.5}

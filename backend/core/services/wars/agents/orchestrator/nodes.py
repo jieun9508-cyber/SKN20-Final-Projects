@@ -122,9 +122,34 @@ def observe_game_state(state: OrchestratorState) -> OrchestratorState:
             player_line += f", ⚠️감지된아키이슈={arch_issues}"
         lines.append(player_line)
 
+    # ✅ [Agent 행동] 두 플레이어 비교 분석 — Orchestrator가 게임 밸런싱 판단
+    leading_sid = None
+    trailing_sid = None
+    node_gap = 0
+
+    if len(snapshots) == 2:
+        sids = list(snapshots.keys())
+        n0 = snapshots[sids[0]]['node_count']
+        n1 = snapshots[sids[1]]['node_count']
+        node_gap = abs(n0 - n1)
+
+        if node_gap >= 2:  # 2개 이상 차이 나면 격차 감지
+            leading_sid = sids[0] if n0 > n1 else sids[1]
+            trailing_sid = sids[1] if n0 > n1 else sids[0]
+            lines.append(
+                f"⚠️ 설계 격차 감지: {node_gap}개 차이 — "
+                f"선두={leading_sid[:8]}, 지연={trailing_sid[:8]}"
+            )
+
     summary = "\n".join(lines)
     logger.info(f"[Orchestrator] 상황 요약:\n{summary}")
-    return {**state, "situation_summary": summary}
+    return {
+        **state,
+        "situation_summary": summary,
+        "leading_sid": leading_sid,
+        "trailing_sid": trailing_sid,
+        "node_gap": node_gap,
+    }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -200,6 +225,19 @@ def _llm_decide(state: OrchestratorState) -> List[Dict[str, Any]]:
             "arch_issues_detected": arch_issues,
         })
 
+    # ✅ 격차 정보 추출
+    leading_sid = state.get('leading_sid')
+    trailing_sid = state.get('trailing_sid')
+    node_gap = state.get('node_gap', 0)
+    gap_context = ""
+    if leading_sid and trailing_sid:
+        gap_context = f"""
+[실시간 격차 감지]
+{leading_sid[:8]}가 {trailing_sid[:8]}보다 {node_gap}개 앞서있습니다.
+→ 뒤캘지는 플레이어({trailing_sid[:8]})에게 Coach 우선 개입을 고려하세요.
+→ 앞선 플레이어({leading_sid[:8]})에게는 Chaos 발동으로 역전 기회를 부여하는 것을 고려하세요.
+"""
+
     response = _get_client().chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -237,7 +275,7 @@ JSON 배열로만 응답합니다.""",
 
 [플레이어 상세 데이터]
 {json.dumps(player_info, ensure_ascii=False, indent=2)}
-
+{gap_context}
 [핵심 제약]
 - chaos_triggered: {state.get('chaos_triggered')} → True면 chaos 절대 불가
 - 전체 배치 노드 합계: {total_nodes}개 → {_CHAOS_MIN_NODES}개 미만이면 chaos 불가
@@ -338,15 +376,22 @@ def _rule_based_action_plan(state: OrchestratorState) -> List[Dict[str, Any]]:
     plan = []
 
     if can_trigger_coach(tmp_room, trigger_sid):
+        # ✅ [격차 반영] 뒤쳌지는 플레이어에게 Coach 우선
+        target_coach_sid = state.get('trailing_sid') or trigger_sid
         plan.append({
-            "agent": "coach", "sid": trigger_sid,
-            "reason": "룰 기반: 헤매는 상황 감지"
+            "agent": "coach", "sid": target_coach_sid,
+            "reason": "룰 기반: 헤매는 상황 감지" + (
+                f" (압도적 격차로 인한 Coach 우선)" if state.get('node_gap', 0) >= 2 else ""
+            )
         })
 
     if can_trigger_chaos(tmp_room):
         plan.append({
             "agent": "chaos", "sid": None,
-            "reason": "룰 기반: 설계 시작됨 + chaos 발동 조건 충족"
+            "reason": "룰 기반: 설계 시작됨 + chaos 발동 조건 충족" + (
+                f" (앞선 플레이어 {state.get('leading_sid', '')[:8]}에게 펕디쿥제)"
+                if state.get('node_gap', 0) >= 2 else ""
+            )
         })
 
     if not plan:

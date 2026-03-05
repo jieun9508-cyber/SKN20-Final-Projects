@@ -227,6 +227,8 @@ async def draw_start(sid, data):
             p['last_nodes'] = []
             p['last_arrows'] = []
             p['submitted'] = False
+        # ✅ [Agent 행동] Chaos 채점 룰 초기화 (신규 게임 시작)
+        room['chaos_bonus_check'] = None
         # [수정일: 2026-03-03] DB(unit03) 미션 lazy 로드
         missions = await _get_missions()
         if not missions:
@@ -282,8 +284,17 @@ async def run_draw_room_tick(room_id):
                     print(f"⏰ [Poll] Hint pushed to {actual_target[:8]}")
                     await sio.emit('coach_hint', hint_payload, to=actual_target)
                 if res.get('chaos_event'):
+                    chaos_ev = res['chaos_event']
                     print(f"⏰ [Poll] Chaos pushed in Room: {room_id}")
-                    await sio.emit('chaos_event', res['chaos_event'], room=room_id)
+                    # ✅ [Agent 행동] Poll에서 오는 Chaos도 동일하게 게임 룰 수정
+                    req_comp = chaos_ev.get('required_component')
+                    if req_comp and room_id in draw_rooms:
+                        draw_rooms[room_id]['chaos_bonus_check'] = {
+                            'component': req_comp,
+                            'bonus_pts': 20,
+                            'penalty_pts': -10,
+                        }
+                    await sio.emit('chaos_event', chaos_ev, room=room_id)
         
         await asyncio.sleep(8) # 8초마다 체크 (trigger_policy 임계값과 상충되지 않는 주기로 선정)
     print(f"🛑 [ArchDraw] Periodic check stopped for room: {room_id}")
@@ -310,7 +321,18 @@ async def draw_submit(sid, data):
         complete_bonus = 20 if ratio == 1.0 else 0                   # 전부 통과 시 +20점
         combo_bonus = min(data.get('combo', 0), 5) * 2               # 최대 10점 (5콤보 상한)
         pts = check_score + time_bonus + complete_bonus + combo_bonus
-        
+
+        # ✅ [Agent 행동 반영] ChaosAgent가 설정한 게임 룰 체크
+        chaos_check = room.get('chaos_bonus_check')
+        if chaos_check:
+            placed_ids = [n.get('compId') for n in data.get('final_nodes', [])]
+            if chaos_check['component'] in placed_ids:
+                pts += chaos_check['bonus_pts']
+                print(f"✅ [ArchDraw] Chaos 조건 충족: {player['name']} +{chaos_check['bonus_pts']}점 ({chaos_check['component']} 배치 확인)")
+            else:
+                pts += chaos_check['penalty_pts']  # 음수값
+                print(f"❌ [ArchDraw] Chaos 조건 미충족: {player['name']} {chaos_check['penalty_pts']}점 ({chaos_check['component']} 누락)")
+
         player['score'] += pts
         player['last_pts'] = pts
         player['last_checks'] = checks
@@ -439,6 +461,8 @@ async def draw_next_round(sid, data):
             room_state.hint_history = {}
             room_state.past_event_ids = []
             room_state.player_designs = {}
+        # ✅ [Agent 행동] 다음 라운드에서 Chaos 채점 룰 리셋
+        room['chaos_bonus_check'] = None
         
         # 새로운 무작위 문제 선택 + 팔레트 서버 생성
         cur_round = data.get('round', room.get('current_round', 1) + 1)
@@ -487,9 +511,19 @@ async def draw_canvas_sync(sid, data):
             target_sid = res['coach_hint'].get('_target_sid', sid)
             print(f"💡 [ArchDraw] Hint Sent to {target_sid[:8]}: {hint_payload.get('message', '')[:20]}...")
             await sio.emit('coach_hint', hint_payload, to=target_sid)  # [수정일: 2026-03-03] room= → to= (개인 전송)
-        if res.get('chaos_event'): 
-            print(f"🔥 [ArchDraw] Chaos Event in Room: {room_id}")
-            await sio.emit('chaos_event', res['chaos_event'], room=room_id)
+        if res.get('chaos_event'):
+            chaos_ev = res['chaos_event']
+            print(f"🔥 [ArchDraw] Chaos Event in Room: {room_id} | required_component={chaos_ev.get('required_component')}")
+            # ✅ [Agent 행동] Chaos가 게임 룰을 직접 수정 — 채점 시 반영됨
+            req_comp = chaos_ev.get('required_component')
+            if req_comp:
+                draw_rooms[room_id]['chaos_bonus_check'] = {
+                    'component': req_comp,
+                    'bonus_pts': 20,
+                    'penalty_pts': -10,
+                }
+                print(f"📋 [ArchDraw] Chaos 채점 룰 추가: +20 if {req_comp} placed, -10 if not")
+            await sio.emit('chaos_event', chaos_ev, room=room_id)
 
 @sio.event
 async def draw_chaos_complete(sid, data):

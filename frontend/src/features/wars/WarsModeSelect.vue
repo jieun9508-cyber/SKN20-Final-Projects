@@ -259,7 +259,7 @@ const goTo = (path) => router.push(path);
 }
 
 .exit-btn {
-  position: fixed; top: 1.5rem; left: 1.5rem;
+  position: fixed; top: 1.5rem; right: 1.5rem;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.1);
   color: #94a3b8;
