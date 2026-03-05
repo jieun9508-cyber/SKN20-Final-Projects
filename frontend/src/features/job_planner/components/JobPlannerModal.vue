@@ -391,41 +391,41 @@
                   <div class="upload-item">
                     <span class="upload-label">이력서</span>
                     <div class="upload-row">
-                      <label class="upload-btn" :class="{ uploaded: resumePdf }">
+                      <label class="upload-btn" :class="{ uploaded: resumeFileName }">
                         {{ resumeFileName || '+ PDF 업로드' }}
                         <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'resume')" hidden>
                       </label>
-                      <button v-if="resumePdf" class="upload-clear-btn" @click="clearPdf('resume')" title="삭제">×</button>
+                      <button v-if="resumeFileName" class="upload-clear-btn" @click="clearPdf('resume')" title="삭제">×</button>
                     </div>
                   </div>
                   <div class="upload-item">
                     <span class="upload-label">경력기술서</span>
                     <div class="upload-row">
-                      <label class="upload-btn" :class="{ uploaded: careerDescPdf }">
+                      <label class="upload-btn" :class="{ uploaded: careerDescFileName }">
                         {{ careerDescFileName || '+ PDF 업로드' }}
                         <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'career_description')" hidden>
                       </label>
-                      <button v-if="careerDescPdf" class="upload-clear-btn" @click="clearPdf('career_description')" title="삭제">×</button>
+                      <button v-if="careerDescFileName" class="upload-clear-btn" @click="clearPdf('career_description')" title="삭제">×</button>
                     </div>
                   </div>
                   <div class="upload-item">
                     <span class="upload-label">자기소개서</span>
                     <div class="upload-row">
-                      <label class="upload-btn" :class="{ uploaded: coverLetterPdf }">
+                      <label class="upload-btn" :class="{ uploaded: coverLetterFileName }">
                         {{ coverLetterFileName || '+ PDF 업로드' }}
                         <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'cover_letter')" hidden>
                       </label>
-                      <button v-if="coverLetterPdf" class="upload-clear-btn" @click="clearPdf('cover_letter')" title="삭제">×</button>
+                      <button v-if="coverLetterFileName" class="upload-clear-btn" @click="clearPdf('cover_letter')" title="삭제">×</button>
                     </div>
                   </div>
                   <div class="upload-item">
                     <span class="upload-label">포트폴리오</span>
                     <div class="upload-row">
-                      <label class="upload-btn" :class="{ uploaded: portfolioPdf }">
+                      <label class="upload-btn" :class="{ uploaded: portfolioFileName }">
                         {{ portfolioFileName || '+ PDF 업로드' }}
                         <input type="file" accept=".pdf" @change="handlePdfUpload($event, 'portfolio')" hidden>
                       </label>
-                      <button v-if="portfolioPdf" class="upload-clear-btn" @click="clearPdf('portfolio')" title="삭제">×</button>
+                      <button v-if="portfolioFileName" class="upload-clear-btn" @click="clearPdf('portfolio')" title="삭제">×</button>
                     </div>
                   </div>
                 </div>
@@ -1258,7 +1258,18 @@ export default {
           }
         }
 
+        // 디버깅: 어떤 서류가 새로 파싱되고 어떤 서류가 기존 결과 사용인지 확인
+        console.log('[서류파싱] 새로 파싱할 서류:', {
+          resume: !!this.resumePdf,
+          cover_letter: !!this.coverLetterPdf,
+          portfolio: !!this.portfolioPdf,
+          career_description: !!this.careerDescPdf
+        });
+        console.log('[서류파싱] existing_doc_results 키:', Object.keys(payload.existing_doc_results || {}));
+
         const response = await axios.post('/api/core/job-planner/parse-resume/', payload);
+        console.log('[서류파싱] 응답 _doc_results 키:', Object.keys(response.data._doc_results || {}));
+
         this.applyProfileData(response.data);
         this.documentParseSuccess = true;
         // 개별 서류 파싱 결과 저장
@@ -1266,6 +1277,12 @@ export default {
           this.saveDocResultsToStorage(response.data._doc_results);
         }
         this.saveProfileToStorage();
+        // 파싱 완료 후 PDF 데이터 클리어 (다음 파싱 시 부분 업데이트가 정상 작동하도록)
+        this.resumePdf = null;
+        this.coverLetterPdf = null;
+        this.portfolioPdf = null;
+        this.careerDescPdf = null;
+        console.log('[서류파싱] PDF 데이터 클리어 완료');
       } catch (error) {
         console.error('서류 분석 실패:', error);
         this.errorMessage = error.response?.data?.error || '서류 분석 중 오류가 발생했습니다.';

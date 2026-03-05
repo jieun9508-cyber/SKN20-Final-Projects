@@ -2120,14 +2120,24 @@ class JobPlannerRecommendView(APIView):
         llm_client = openai.OpenAI(api_key=api_key)
 
         def evaluate_one(candidate):
+            # 기술 매칭 점수: 객관적 계산 (40점 만점)
+            matched_count = candidate.get('matched_count', 0)
+            total_skills = candidate.get('total_skills', 1)
+            skill_score = round(min(matched_count / total_skills, 1.0) * 40) if total_skills > 0 else 0
+
             detail_text = candidate.get('detail_text', '')
             if not detail_text:
-                # 상세 텍스트 없으면 스킬 매칭 점수 그대로 사용
+                # 상세 텍스트 없으면 스킬 점수만으로 산출
+                candidate['skill_score'] = skill_score
+                candidate['experience_score'] = 0
+                candidate['project_score'] = 0
+                candidate['llm_score'] = skill_score
                 return candidate
 
             prompt = f"""당신은 채용 적합도 평가 전문가입니다.
 
-아래 [채용공고]와 [지원자 프로필]을 비교하여 적합도를 평가하세요.
+아래 [채용공고]와 [지원자 프로필]을 비교하여 경력과 프로젝트 적합도만 평가하세요.
+(기술 스택 일치도는 별도로 계산하므로 평가하지 마세요)
 
 [채용공고]
 회사: {candidate['company_name']}
@@ -2136,18 +2146,16 @@ class JobPlannerRecommendView(APIView):
 {detail_text}
 
 [지원자 프로필]
-보유 스킬: {', '.join(user_profile.get('skills', []))}
 경력: {user_profile.get('experience_summary', '정보 없음')}
 프로젝트: {user_profile.get('projects_summary', '정보 없음')}
 핵심 성과: {user_profile.get('achievements_summary', '정보 없음')}
 
-다음 기준으로 평가하세요:
-1. 기술 스택 일치도 (스킬이 공고 요구사항과 얼마나 맞는지)
-2. 경력 적합도 (경력 내용이 공고 업무와 관련 있는지)
-3. 프로젝트 관련성 (수행한 프로젝트가 공고 업무에 도움이 되는지)
+다음 기준별 배점으로 평가하세요:
+1. 경력 적합도 (30점 만점): 경력 내용이 공고 업무와 관련 있는지
+2. 프로젝트 관련성 (30점 만점): 수행한 프로젝트가 공고 업무에 도움이 되는지
 
 반드시 아래 JSON 형식으로만 응답하세요:
-{{"requirements_summary": "이 공고가 원하는 인재상/주요 요구사항을 2-3문장으로 요약 (공고 내용 기반)", "score": 0~100 정수, "reason": "이 지원자에게 적합한 이유를 구체적 근거 기반으로 2-3문장으로 작성"}}"""
+{{"requirements_summary": "이 공고가 원하는 인재상/주요 요구사항을 2-3문장으로 요약 (공고 내용 기반)", "experience_score": 0~30 정수, "project_score": 0~30 정수, "reason": "이 지원자에게 적합한 이유를 구체적 근거 기반으로 2-3문장으로 작성"}}"""
 
             try:
                 response = llm_client.chat.completions.create(
@@ -2158,14 +2166,23 @@ class JobPlannerRecommendView(APIView):
                     max_tokens=600,
                 )
                 result = json.loads(response.choices[0].message.content)
-                candidate['llm_score'] = result.get('score', 0)
+                exp_score = min(result.get('experience_score', 0), 30)
+                proj_score = min(result.get('project_score', 0), 30)
+                total = skill_score + exp_score + proj_score
+
+                candidate['skill_score'] = skill_score
+                candidate['experience_score'] = exp_score
+                candidate['project_score'] = proj_score
+                candidate['llm_score'] = total
                 candidate['reason'] = result.get('reason', candidate.get('reason', ''))
                 candidate['requirements_summary'] = result.get('requirements_summary', '')
-                candidate['requirements_summary'] = result.get('requirements_summary', '')
-                print(f"  🤖 {candidate['company_name']} | LLM 적합도: {candidate['llm_score']}점")
+                print(f"  🤖 {candidate['company_name']} | 기술:{skill_score}/40(객관) 경력:{exp_score}/30 프로젝트:{proj_score}/30 = 총:{total}점")
             except Exception as e:
                 print(f"  ⚠️ LLM 평가 실패 ({candidate['company_name']}): {e}")
-                candidate['llm_score'] = int(candidate.get('match_rate', 0) * 100)
+                candidate['skill_score'] = skill_score
+                candidate['experience_score'] = 0
+                candidate['project_score'] = 0
+                candidate['llm_score'] = skill_score
             return candidate
 
         # 최대 5개 병렬 평가
