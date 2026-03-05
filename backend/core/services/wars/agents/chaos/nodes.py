@@ -395,7 +395,7 @@ def regenerate(state: ChaosAgentState) -> ChaosAgentState:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def finalize(state: ChaosAgentState) -> ChaosAgentState:
-    """최종 이벤트 확정"""
+    """최종 이벤트 확정 + required_component 결정 (채점 반영용)"""
     logger.info("[ChaosAgent] ▶ finalize 노드 실행")
 
     event = state.get("raw_event")
@@ -403,7 +403,19 @@ def finalize(state: ChaosAgentState) -> ChaosAgentState:
         logger.error("[ChaosAgent] 최종 이벤트 없음 → 폴백")
         event = _fallback_by_nodes(state["deployed_nodes"])
 
-    logger.info(f"[ChaosAgent] ✅ 이벤트 확정: {event.get('event_id')} / severity={event.get('severity')}")
+    # ✅ [Agent 행동] required_component 결정
+    # target_components 중 아직 배치 안 된 것 → 플레이어가 추가해야 할 컴포넌트
+    # 이미 다 배치한 경우 → target 중 하나를 그대로 사용 (심화 조건)
+    deployed_set = set(state.get("deployed_nodes", []))
+    targets = event.get("target_components", [])
+    not_deployed = [c for c in targets if c not in deployed_set]
+    required_component = not_deployed[0] if not_deployed else (targets[0] if targets else None)
+    event["required_component"] = required_component
+
+    logger.info(
+        f"[ChaosAgent] ✅ 이벤트 확정: {event.get('event_id')} / "
+        f"severity={event.get('severity')} / required_component={required_component}"
+    )
     return {**state, "final_event": event}
 
 

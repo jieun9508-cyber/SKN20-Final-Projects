@@ -2120,14 +2120,24 @@ class JobPlannerRecommendView(APIView):
         llm_client = openai.OpenAI(api_key=api_key)
 
         def evaluate_one(candidate):
+            # 기술 매칭 점수: 객관적 계산 (40점 만점)
+            matched_count = candidate.get('matched_count', 0)
+            total_skills = candidate.get('total_skills', 1)
+            skill_score = round(min(matched_count / total_skills, 1.0) * 40) if total_skills > 0 else 0
+
             detail_text = candidate.get('detail_text', '')
             if not detail_text:
-                # 상세 텍스트 없으면 스킬 매칭 점수 그대로 사용
+                # 상세 텍스트 없으면 스킬 점수만으로 산출
+                candidate['skill_score'] = skill_score
+                candidate['experience_score'] = 0
+                candidate['project_score'] = 0
+                candidate['llm_score'] = skill_score
                 return candidate
 
             prompt = f"""당신은 채용 적합도 평가 전문가입니다.
 
-아래 [채용공고]와 [지원자 프로필]을 비교하여 적합도를 평가하세요.
+아래 [채용공고]와 [지원자 프로필]을 비교하여 경력과 프로젝트 적합도만 평가하세요.
+(기술 스택 일치도는 별도로 계산하므로 평가하지 마세요)
 
 [채용공고]
 회사: {candidate['company_name']}
@@ -2136,18 +2146,16 @@ class JobPlannerRecommendView(APIView):
 {detail_text}
 
 [지원자 프로필]
-보유 스킬: {', '.join(user_profile.get('skills', []))}
 경력: {user_profile.get('experience_summary', '정보 없음')}
 프로젝트: {user_profile.get('projects_summary', '정보 없음')}
 핵심 성과: {user_profile.get('achievements_summary', '정보 없음')}
 
-다음 기준으로 평가하세요:
-1. 기술 스택 일치도 (스킬이 공고 요구사항과 얼마나 맞는지)
-2. 경력 적합도 (경력 내용이 공고 업무와 관련 있는지)
-3. 프로젝트 관련성 (수행한 프로젝트가 공고 업무에 도움이 되는지)
+다음 기준별 배점으로 평가하세요:
+1. 경력 적합도 (30점 만점): 경력 내용이 공고 업무와 관련 있는지
+2. 프로젝트 관련성 (30점 만점): 수행한 프로젝트가 공고 업무에 도움이 되는지
 
 반드시 아래 JSON 형식으로만 응답하세요:
-{{"requirements_summary": "이 공고가 원하는 인재상/주요 요구사항을 2-3문장으로 요약 (공고 내용 기반)", "score": 0~100 정수, "reason": "이 지원자에게 적합한 이유를 구체적 근거 기반으로 2-3문장으로 작성"}}"""
+{{"requirements_summary": "이 공고가 원하는 인재상/주요 요구사항을 2-3문장으로 요약 (공고 내용 기반)", "experience_score": 0~30 정수, "project_score": 0~30 정수, "reason": "이 지원자에게 적합한 이유를 구체적 근거 기반으로 2-3문장으로 작성"}}"""
 
             try:
                 response = llm_client.chat.completions.create(
@@ -2158,14 +2166,23 @@ class JobPlannerRecommendView(APIView):
                     max_tokens=600,
                 )
                 result = json.loads(response.choices[0].message.content)
-                candidate['llm_score'] = result.get('score', 0)
+                exp_score = min(result.get('experience_score', 0), 30)
+                proj_score = min(result.get('project_score', 0), 30)
+                total = skill_score + exp_score + proj_score
+
+                candidate['skill_score'] = skill_score
+                candidate['experience_score'] = exp_score
+                candidate['project_score'] = proj_score
+                candidate['llm_score'] = total
                 candidate['reason'] = result.get('reason', candidate.get('reason', ''))
                 candidate['requirements_summary'] = result.get('requirements_summary', '')
-                candidate['requirements_summary'] = result.get('requirements_summary', '')
-                print(f"  🤖 {candidate['company_name']} | LLM 적합도: {candidate['llm_score']}점")
+                print(f"  🤖 {candidate['company_name']} | 기술:{skill_score}/40(객관) 경력:{exp_score}/30 프로젝트:{proj_score}/30 = 총:{total}점")
             except Exception as e:
                 print(f"  ⚠️ LLM 평가 실패 ({candidate['company_name']}): {e}")
-                candidate['llm_score'] = int(candidate.get('match_rate', 0) * 100)
+                candidate['skill_score'] = skill_score
+                candidate['experience_score'] = 0
+                candidate['project_score'] = 0
+                candidate['llm_score'] = skill_score
             return candidate
 
         # 최대 5개 병렬 평가
@@ -2810,7 +2827,6 @@ JSON 형식:
 
 
 @method_decorator(csrf_exempt, name='dispatch')
-@method_decorator(csrf_exempt, name='dispatch')
 class JobPlannerReviewPortfolioView(APIView):
     """채용공고 기준 포트폴리오 개선점 분석 API (파싱된 데이터 기반)"""
     authentication_classes = []
@@ -2841,10 +2857,61 @@ class JobPlannerReviewPortfolioView(APIView):
                 messages=[
                     {
                         "role": "system",
-                        "content": """당신은 IT 취업 포트폴리오 전문 컨설턴트입니다.
-채용공고의 구체적인 요구사항과 지원자의 포트폴리오 내용을 1:1로 대조하여 분석합니다.
-포트폴리오에서 추출된 프로젝트, 기술스택, 성과 등을 꼼꼼히 분석하세요.
-뻔한 조언이 아닌, 이 공고와 이 포트폴리오에만 해당되는 맞춤 피드백을 제공합니다."""
+                        "content": """당신은 IT 채용 포트폴리오 전문 리뷰어입니다.
+
+[분석 방법론]
+1. 공고의 각 요구사항(필수 스킬, 우대 스킬, 업무 내용)을 하나씩 꺼내서, 포트폴리오의 경험 중 대응되는 것을 1:1 매칭합니다.
+2. 매칭된 경험의 서술 완성도를 아래 기준으로 평가합니다:
+   - 실무 경력: STAR 기법(Situation→Task→Action→Result) 기준. 상황, 과제, 행동, 정량적 성과가 모두 있는지 확인.
+   - 팀 프로젝트: 본인 담당 범위, 기술 선택 이유, 협업 방식이 명확한지 확인.
+   - 개인/학습 프로젝트: 만든 동기, 겪은 문제와 해결 과정, 배운 점이 있는지 확인.
+3. 매칭되지 않는 요구사항은 포트폴리오의 유사 경험에서 연결고리를 찾아 대체 어필 방법을 제안합니다.
+4. 모든 조언에는 반드시 "현재 서술(as_is)"과 "개선 서술(to_be)"을 대비하여 제시합니다.
+5. 포트폴리오에서 추출된 프로젝트, 기술스택, 성과 등을 꼼꼼히 분석합니다.
+
+[필수 규칙]
+- "프로젝트 설명을 보강하세요", "기술 스택을 강조하세요" 같은 추상적 조언 금지
+- 반드시 포트폴리오의 특정 프로젝트명 또는 경력사항을 지목하여 조언할 것
+- 반드시 공고의 어떤 요구사항에 대응하는 조언인지 명시할 것
+- 정량적 성과가 없는 프로젝트는 해당 프로젝트에서 측정 가능한 수치가 무엇인지 구체적으로 제안할 것
+- to_be는 포트폴리오에 바로 붙여넣을 수 있는 수준의 완성된 문장을 작성할 것
+- to_be에 공고에서 사용된 키워드를 자연스럽게 포함할 것
+
+[Few-shot 예시 — improvements 작성법]
+
+❌ 나쁜 예시 (추상적):
+{
+  "target": "실시간 감성 분석 대시보드",
+  "issue": "프론트엔드 성능 최적화 경험이 부족합니다.",
+  "as_is": "React를 사용하여 대시보드를 개발했습니다.",
+  "to_be": "성능 최적화 사례를 추가하세요."
+}
+
+✅ 좋은 예시 (구체적):
+{
+  "target": "실시간 감성 분석 대시보드",
+  "issue": "공고에서 요구하는 '대규모 트래픽 처리 경험'에 대한 서술이 없습니다. 현재는 단순 기능 나열에 그치고 있어 성능 관점의 기술적 깊이가 드러나지 않습니다.",
+  "as_is": "React와 Chart.js를 활용하여 실시간 감성 분석 결과를 시각화하는 대시보드를 개발했습니다.",
+  "to_be": "React.memo와 useMemo를 적용하여 실시간 데이터 스트림(초당 50건) 환경에서 불필요한 리렌더링을 70% 줄이고, React-Query의 staleTime 설정으로 API 호출 빈도를 분당 60회에서 12회로 최적화했습니다. Chart.js canvas 렌더링 시 requestAnimationFrame 기반 배치 업데이트를 도입하여 프레임 드롭 없이 실시간 차트를 구현했습니다."
+}
+
+❌ 나쁜 예시 (추상적):
+{
+  "target": "AI Knowledge Bot",
+  "issue": "팀 리드 경험이 부족합니다.",
+  "as_is": "팀 프로젝트로 진행했습니다.",
+  "to_be": "팀에서의 역할을 구체적으로 서술하세요."
+}
+
+✅ 좋은 예시 (구체적):
+{
+  "target": "AI Knowledge Bot",
+  "issue": "공고에서 요구하는 '팀 리더십 및 협업 경험'에 대해, 현재 서술에는 본인의 역할과 기여도가 드러나지 않습니다.",
+  "as_is": "4인 팀 프로젝트로 FastAPI 기반 AI 챗봇을 개발했습니다.",
+  "to_be": "4인 팀에서 백엔드 리드를 맡아 API 설계와 코드 리뷰를 주도했습니다. 주 2회 기술 미팅을 통해 LangChain RAG 파이프라인의 아키텍처 결정을 이끌었고, GitHub PR 리뷰 프로세스를 도입하여 배포 후 버그를 팀 평균 대비 40% 감소시켰습니다. Notion으로 API 명세서를 문서화하여 프론트엔드 팀과의 통합 일정을 1주 단축했습니다."
+}
+
+위 예시처럼 as_is에는 포트폴리오의 실제 서술(또는 서술이 없으면 '해당 내용 없음')을, to_be에는 공고 키워드를 반영한 구체적 개선 문장을 작성하세요."""
                     },
                     {
                         "role": "user",
@@ -2865,12 +2932,6 @@ class JobPlannerReviewPortfolioView(APIView):
 === 포트폴리오 분석 내용 ===
 {portfolio_content}
 
-=== 분석 기준 ===
-1. 포트폴리오의 프로젝트, 기술스택, 성과 등 구체적 내용을 기반으로 분석
-2. 공고의 각 요구사항(업무, 필수요건, 우대사항)을 포트폴리오 내용과 구체적으로 대조
-3. 포트폴리오에서 이 공고에 어필할 수 있는 포인트와 부족한 포인트 발굴
-4. 포트폴리오에 어떤 내용을 어떻게 수정/보완해야 하는지 실행 가능한 가이드 제공
-
 JSON으로 반환하세요:
 {{
   "strengths": [
@@ -2879,8 +2940,9 @@ JSON으로 반환하세요:
   "improvements": [
     {{
       "target": "개선 대상 (포트폴리오의 특정 프로젝트명 또는 섹션)",
-      "issue": "이 공고 기준으로 부족한 점",
-      "suggestion": "포트폴리오에 어떻게 보완하여 작성할지 구체적 방법 (예: 어떤 내용을 추가하고, 어떤 키워드를 포함하고, 어떤 구조로 정리할지)"
+      "issue": "이 공고 기준으로 부족한 점 (공고의 어떤 요구사항에 대응하는지 명시)",
+      "as_is": "포트폴리오의 현재 서술 (실제 내용을 인용하거나 요약. 서술이 없으면 '해당 내용 없음')",
+      "to_be": "개선된 서술 예시 (포트폴리오에 바로 붙여넣을 수 있는 완성된 문장. 공고 키워드 반영, 정량적 수치 포함)"
     }}
   ],
   "missing": [

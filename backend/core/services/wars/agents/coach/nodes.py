@@ -183,11 +183,12 @@ def generate_hint(state: CoachAgentState) -> CoachAgentState:
 
 
 def _generate_direct_hint(situation: str, missing: list, state: CoachAgentState) -> Dict:
-    """룰 기반 직접 힌트"""
+    """룰 기반 직접 힌트 + highlight_component 포함"""
     if situation == "empty":
         return {
             "message": "💡 아직 아무것도 배치하지 않으셨네요. 사용자(Client)부터 시작해보는 건 어떨까요?",
             "missing_components": list(state["mission_required"]),
+            "highlight_component": "client",  # ✅ [Agent 행동] 팔레트 하이라이트 대상
             "type": "general",
             "level": 1,
         }
@@ -203,6 +204,7 @@ def _generate_direct_hint(situation: str, missing: list, state: CoachAgentState)
         return {
             "message": f"💡 {msg}",
             "missing_components": missing,
+            "highlight_component": priority,  # ✅ [Agent 행동] 누락된 컴포넌트 팔레트 하이라이트
             "type": "missing_component",
             "level": 1,
         }
@@ -211,11 +213,12 @@ def _generate_direct_hint(situation: str, missing: list, state: CoachAgentState)
         return {
             "message": "💡 컴포넌트를 모두 배치했네요! 이제 데이터 흐름(화살표)을 연결해보세요.",
             "missing_components": [],
+            "highlight_component": None,
             "type": "no_arrows",
             "level": 1,
         }
 
-    return {"message": "", "missing_components": [], "type": "complete", "level": 0}
+    return {"message": "", "missing_components": [], "highlight_component": None, "type": "complete", "level": 0}
 
 
 def _generate_socratic_hint(state: CoachAgentState, missing: list) -> Dict:
@@ -252,9 +255,17 @@ def _generate_socratic_hint(state: CoachAgentState, missing: list) -> Dict:
         logger.error(f"[CoachAgent] socratic LLM 실패: {e}")
         message = COMPONENT_HINTS.get(priority, f"'{priority}'에 대해 생각해보세요.")
 
+    # 우선순위 컴포넌트 재계산 (highlight용)
+    priority = missing[0] if missing else None
+    for req in state["mission_required"]:
+        if req in missing:
+            priority = req
+            break
+
     return {
         "message": message,
         "missing_components": missing,
+        "highlight_component": priority,  # ✅ [Agent 행동]
         "type": "missing_component",
         "level": 2,
     }
@@ -291,9 +302,16 @@ def _generate_escalate_hint(state: CoachAgentState, missing: list) -> Dict:
         logger.error(f"[CoachAgent] escalate LLM 실패: {e}")
         message = f"🚨 {missing_str} 컴포넌트를 지금 바로 캔버스에 추가하세요. 왼쪽 패널에서 드래그해서 배치할 수 있습니다."
 
+    priority = missing[0] if missing else None
+    for req in state["mission_required"]:
+        if req in missing:
+            priority = req
+            break
+
     return {
         "message": message,
         "missing_components": missing,
+        "highlight_component": priority,  # ✅ [Agent 행동]
         "type": "escalate",
         "level": 3,
     }
