@@ -539,7 +539,7 @@ export default {
         return;
       }
       if (idx === this.currentIdx) {
-        if (chapter.name === 'Coduck Wars' || chapter.name === 'Team Battle') {
+        if (chapter.name === 'Coduck Wars' || chapter.name === 'Battle Game') {
           this.$emit('open-coduck-wars');
         } else {
           this.$emit('open-unit', chapter);
