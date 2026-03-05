@@ -91,6 +91,11 @@
               <div v-if="jobData.job_responsibilities" class="preview-detail-section">
                 <div class="preview-detail-title">📋 주요 업무</div>
                 <div class="preview-detail-content">{{ jobData.job_responsibilities }}</div>
+                <div v-if="jobData.responsibilities_skills && jobData.responsibilities_skills.length > 0" class="preview-skill-tags">
+                  <span v-for="(skill, idx) in jobData.responsibilities_skills" :key="'resp-' + idx" class="skill-tag responsibilities">
+                    {{ skill }}
+                  </span>
+                </div>
               </div>
 
               <!-- 필수 요건 -->
@@ -671,6 +676,7 @@
                   :key="'matched-' + idx"
                   class="skill-item"
                 >
+                  <span class="skill-category-badge" :class="match.category || 'required'">{{ {responsibilities: '업무', required: '필수', preferred: '우대'}[match.category] || '필수' }}</span>
                   <span class="skill-required">{{ match.required }}</span>
                   <span class="skill-arrow">↔</span>
                   <span class="skill-user">{{ match.user_skill }}</span>
@@ -688,7 +694,8 @@
                     v-for="(miss, idx) in analysisResult.missing_skills"
                     :key="'missing-' + idx"
                     class="skill-tag-missing"
-                  >{{ miss.required }}</span>
+                    :class="miss.category || 'required'"
+                  ><span class="skill-category-badge" :class="miss.category || 'required'">{{ {responsibilities: '업무', required: '필수', preferred: '우대'}[miss.category] || '필수' }}</span>{{ miss.required }}</span>
                 </div>
               </div>
             </div>
@@ -1471,6 +1478,10 @@ export default {
             ...(this.jobData.preferred_skills || []),
             ...(newData.preferred_skills || [])
           ])],
+          responsibilities_skills: [...new Set([
+            ...(this.jobData.responsibilities_skills || []),
+            ...(newData.responsibilities_skills || [])
+          ])],
 
           // 텍스트 필드 병합 (중복 체크)
           job_responsibilities: mergeText(this.jobData.job_responsibilities, newData.job_responsibilities),
@@ -1520,6 +1531,7 @@ export default {
           // 채용공고 정보
           required_skills: this.jobData.required_skills,
           preferred_skills: this.jobData.preferred_skills,
+          responsibilities_skills: this.jobData.responsibilities_skills || [],
           experience_range: this.jobData.experience_range,
           position: this.jobData.position || '',
 
@@ -2479,6 +2491,12 @@ export default {
   color: #fca5a5;
 }
 
+.skill-tag.responsibilities {
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fcd34d;
+}
+
 .skill-tag.preferred {
   background: rgba(59, 130, 246, 0.2);
   border: 1px solid rgba(59, 130, 246, 0.3);
@@ -2792,6 +2810,26 @@ export default {
   color: #f87171;
   font-size: 13px;
   font-weight: 500;
+}
+
+.skill-category-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.skill-category-badge.required {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+.skill-category-badge.responsibilities {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+.skill-category-badge.preferred {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
 }
 
 .skill-required {

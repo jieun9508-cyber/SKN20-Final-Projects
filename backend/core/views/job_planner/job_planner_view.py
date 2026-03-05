@@ -419,7 +419,8 @@ class JobPlannerParseView(APIView):
 - required_qualifications: string (필수 요건 원문)
 - preferred_qualifications: string (우대 조건 원문)
 - required_skills: array of strings (필수 요건에서 언급된 기술/도구명만 추출. 예: "React", "Python", "Docker")
-- preferred_skills: array of strings (우대 조건에서 언급된 기술/도구명만 추출. 문장 속에 포함된 기술명도 반드시 추출. 예: "Typescript 기반 프로젝트 경험" -> "Typescript")
+- preferred_skills: array of strings (우대 조건에서 언급된 기술/도구/분야명을 모두 추출. 문장 속에 포함된 기술명도 반드시 추출. 예: "Typescript 기반 프로젝트 경험" -> "Typescript")
+- responsibilities_skills: array of strings (담당업무/주요업무에서 언급된 기술/도구/분야명을 추출. 예: "AI", "XR", "Vision", "Computer Vision")
 - experience_range: string
 - deadline: null"""
                     }
@@ -719,6 +720,7 @@ class JobPlannerAnalyzeView(APIView):
             # 채용공고 정보
             required_skills = request.data.get('required_skills', [])
             preferred_skills = request.data.get('preferred_skills', [])
+            responsibilities_skills = request.data.get('responsibilities_skills', [])
             experience_range = request.data.get('experience_range', '')
             position = request.data.get('position', '')
 
@@ -743,25 +745,67 @@ class JobPlannerAnalyzeView(APIView):
             all_required_skills = list(set(required_skills + extracted_skills['required']))
             all_preferred_skills = list(set(preferred_skills + extracted_skills['preferred']))
 
-            # 최소 1개 이상의 필수 스킬이 있어야 함
-            if not all_required_skills:
+            # 세 카테고리 모두 없을 때만 fallback
+            if not all_required_skills and not responsibilities_skills and not all_preferred_skills:
                 all_required_skills = extracted_skills['required'] if extracted_skills['required'] else ['개발 역량']
 
+            print(f"📊 담당업무 스킬: {len(responsibilities_skills)}개")
             print(f"📊 필수 스킬: {len(required_skills)}개 -> {len(all_required_skills)}개 (텍스트 분석 추가)")
+            print(f"📊 우대 스킬: {len(preferred_skills)}개 -> {len(all_preferred_skills)}개 (텍스트 분석 추가)")
 
-            # 스킬 정규화 (한영 통일) — fallback 매칭 및 향후 활용을 위해 유지
-            user_skills_normalized = [self._normalize_skill(s) for s in user_skills]
-            required_skills_normalized = [self._normalize_skill(s) for s in all_required_skills]
+            # === LLM 기반 스킬 매칭 (담당업무 + 필수 + 우대 통합, category 태그) ===
+            combined_skills = []
+            skill_category_map = {}
+            for s in responsibilities_skills:
+                norm = self._normalize_skill(s)
+                if norm not in skill_category_map:
+                    combined_skills.append(s)
+                    skill_category_map[norm] = 'responsibilities'
+            for s in all_required_skills:
+                norm = self._normalize_skill(s)
+                if norm not in skill_category_map:
+                    combined_skills.append(s)
+                    skill_category_map[norm] = 'required'
+            for s in all_preferred_skills:
+                norm = self._normalize_skill(s)
+                if norm not in skill_category_map:
+                    combined_skills.append(s)
+                    skill_category_map[norm] = 'preferred'
 
-            # === LLM 기반 스킬 매칭 (원본 스킬명 그대로 전달) ===
             matched_skills, missing_skills = self._match_skills_with_llm(
-                all_required_skills, user_skills
+                combined_skills, user_skills
             )
 
-            # === 점수 계산 ===
+            # 매칭/미매칭 결과에 category 태그 추가
+            for m in matched_skills:
+                norm = self._normalize_skill(m['required'])
+                m['category'] = skill_category_map.get(norm, 'required')
+            for m in missing_skills:
+                norm = self._normalize_skill(m['required'])
+                m['category'] = skill_category_map.get(norm, 'required')
 
-            # 매칭률: 필수 스킬 중 얼마나 보유하고 있는지 (0.0 ~ 1.0)
-            match_rate = min(len(matched_skills) / len(all_required_skills), 1.0) if all_required_skills else 0
+            # 담당업무/필수/우대 분리
+            matched_resp = [m for m in matched_skills if m['category'] == 'responsibilities']
+            matched_required = [m for m in matched_skills if m['category'] == 'required']
+            matched_preferred = [m for m in matched_skills if m['category'] == 'preferred']
+
+            print(f"✅ 매칭 결과: 담당업무 {len(matched_resp)}/{len(responsibilities_skills)}, 필수 {len(matched_required)}/{len(all_required_skills)}, 우대 {len(matched_preferred)}/{len(all_preferred_skills)}")
+
+            # === 점수 계산 (존재하는 카테고리에 동적 가중치 배분) ===
+            resp_rate = min(len(matched_resp) / len(responsibilities_skills), 1.0) if responsibilities_skills else 0
+            required_rate = min(len(matched_required) / len(all_required_skills), 1.0) if all_required_skills else 0
+            preferred_rate = min(len(matched_preferred) / len(all_preferred_skills), 1.0) if all_preferred_skills else 0
+
+            weights = {}
+            if responsibilities_skills: weights['resp'] = 0.40
+            if all_required_skills: weights['req'] = 0.40
+            if all_preferred_skills: weights['pref'] = 0.20
+            total_weight = sum(weights.values()) or 1.0
+            match_rate = (
+                weights.get('resp', 0) / total_weight * resp_rate +
+                weights.get('req', 0) / total_weight * required_rate +
+                weights.get('pref', 0) / total_weight * preferred_rate
+            )
 
             # 경력 적합도: work_experience에서 관련 경력만 추출하여 비교
             relevant_years = self._extract_relevant_years(
@@ -1573,10 +1617,13 @@ class JobPlannerRecommendView(APIView):
                                'title': c['title'], 'source': c['source'], 'location': c['location']}
                               for c in candidates]
             enriched = self._enrich_jobs_with_detail(candidate_jobs)
-            # 상세 텍스트를 candidates에 반영
-            url_to_detail = {j['url']: j.get('detail_text', '') for j in enriched}
+            # 상세 텍스트 + enriched 스킬을 candidates에 반영
+            url_to_enriched = {j['url']: j for j in enriched}
             for c in candidates:
-                c['detail_text'] = url_to_detail.get(c['url'], '')
+                ej = url_to_enriched.get(c['url'])
+                if ej:
+                    c['detail_text'] = ej.get('detail_text', '')
+                    c['skills'] = ej.get('skills', c['skills'])
             print(f"✅ 상세 파싱 완료")
 
             # 3차: LLM으로 상세 적합도 평가
