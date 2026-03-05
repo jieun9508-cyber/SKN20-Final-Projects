@@ -81,6 +81,7 @@
         >
           ▶ START GAME
         </button>
+        <button @click="$router.push('/practice/wars')" class="btn-exit-lobby">← 나가기</button>
 
         <!-- [추가] 에러 메시지(토스트) 표시 -->
         <div v-if="errorMsg" class="error-toast">{{ errorMsg }}</div>
@@ -134,15 +135,20 @@
             </div>
 
             <!-- 결승선 -->
-            <div class="finish-line">
-              <div class="finish-icon">🏁</div>
-            </div>
+            <div class="finish-line"></div>
           </div>
 
-          <!-- 컨텍스트 정보 -->
+          <!-- 컨텍스트 정보: 라운드 진행 + 카테고리 힌트 -->
           <div class="line-info">
             <span class="line-badge">{{ currentRound + 1 }} / {{ totalRounds }}</span>
-            <span class="context-text">📋 {{ currentRoundData?.context }}</span>
+            <span class="round-progress-bar">
+              <span
+                v-for="i in totalRounds" :key="i"
+                class="round-dot"
+                :class="{ done: i <= currentRound, current: i === currentRound + 1 }"
+              ></span>
+            </span>
+            <span class="context-text">🎯 {{ selectedDifficulty }} &nbsp;·&nbsp; {{ currentQuest?.title?.slice(0, 24) || 'AICE 실전 퀴즈' }}</span>
           </div>
         </div>
 
@@ -1214,6 +1220,18 @@ function handleBlankWrong() {
   const penalty = 2
   myPhase1Score.value = Math.max(0, myPhase1Score.value - penalty)
   currentCombo.value = 0
+
+  // [2026-03-05] 오답 시 오리 뒤로 밀림 (최소 0)
+  myCorrectBlanks.value = Math.max(0, myCorrectBlanks.value - 1)
+
+  // 오답 즉시 위치 동기화 (상대방이 오리 뒤로 가는 것 볼 수 있게)
+  rs.emitProgress(roomId.value, {
+    phase: 'speedFill',
+    correctBlanks: myCorrectBlanks.value,
+    score: myPhase1Score.value,
+    combo: 0,
+    sid: rs.socket.value?.id
+  })
 
   // 바나나 장애물 연출
   const obstacle = OBSTACLE_POOL[Math.floor(Math.random() * OBSTACLE_POOL.length)]

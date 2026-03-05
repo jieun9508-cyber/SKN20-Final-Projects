@@ -577,6 +577,50 @@
     flex: 1;
 }
 
+.context-hint {
+    font-size: .72rem;
+    color: #475569;
+    font-style: italic;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 라운드 진행 닷 인디케이터 */
+.round-progress-bar {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.round-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    transition: all 0.3s;
+}
+
+.round-dot.done {
+    background: #34d399;
+    border-color: #34d399;
+    box-shadow: 0 0 5px rgba(52, 211, 153, 0.5);
+}
+
+.round-dot.current {
+    background: #00f0ff;
+    border-color: #00f0ff;
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.7);
+    animation: dotPulse 0.8s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.4); }
+}
+
 /* 달리기 스테이지 */
 .runner-stage.dual-track {
     flex: 1;
@@ -596,23 +640,66 @@
     display: flex;
     align-items: flex-end;
     padding-bottom: 8px;
-    border-bottom: 1px dashed rgba(255, 255, 255, 0.05);
-    background: linear-gradient(0deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+}
+
+/* 도로 줄선 휴패리는 마라운 애니메이션 */
+.lane::before {
+    content: '';
+    position: absolute;
+    bottom: 12px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: repeating-linear-gradient(
+        90deg,
+        rgba(255,255,255,0.12) 0px,
+        rgba(255,255,255,0.12) 20px,
+        transparent 20px,
+        transparent 40px
+    );
+    animation: roadLines 0.6s linear infinite;
+}
+
+@keyframes roadLines {
+    from { background-position: 0 0; }
+    to { background-position: -40px 0; }
 }
 
 .lane:last-child {
     border-bottom: none;
 }
 
-/* ← 추가: 각 플레이어 입장 반영 */
+/* 각 플레이어 입장 반영 */
 .lane.my-lane {
-    background: linear-gradient(0deg, rgba(0, 240, 255, 0.05) 0%, transparent 100%);
-    border-left: 2px solid rgba(0, 240, 255, 0.3);
+    background: linear-gradient(0deg, rgba(0, 240, 255, 0.06) 0%, transparent 60%);
+    border-left: 3px solid rgba(0, 240, 255, 0.4);
+}
+
+.lane.my-lane::before {
+    background: repeating-linear-gradient(
+        90deg,
+        rgba(0, 240, 255, 0.2) 0px,
+        rgba(0, 240, 255, 0.2) 20px,
+        transparent 20px,
+        transparent 40px
+    );
 }
 
 .lane.opponent-lane {
-    background: linear-gradient(0deg, rgba(255, 100, 100, 0.05) 0%, transparent 100%);
-    border-left: 2px solid rgba(255, 100, 100, 0.3);
+    background: linear-gradient(0deg, rgba(255, 45, 117, 0.06) 0%, transparent 60%);
+    border-left: 3px solid rgba(255, 45, 117, 0.4);
+}
+
+.lane.opponent-lane::before {
+    background: repeating-linear-gradient(
+        90deg,
+        rgba(255, 45, 117, 0.15) 0px,
+        rgba(255, 45, 117, 0.15) 20px,
+        transparent 20px,
+        transparent 40px
+    );
 }
 
 .lane-label {
@@ -693,23 +780,16 @@
     box-shadow: 0 0 5px rgba(255, 45, 117, 0.2);
 }
 
+/* ── 결승선: 체크무늬 라인 (glow 없이 깔끔하게) ── */
 .finish-line {
     position: absolute;
-    right: 20px;
+    right: 0;
     top: 0;
     bottom: 0;
-    width: 40px;
-    background: repeating-linear-gradient(45deg, #eee 0, #eee 5px, #222 5px, #222 10px);
-    opacity: 0.15;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.finish-icon {
-    font-size: 1.5rem;
-    transform: rotate(-10deg);
-    filter: grayscale(1);
+    width: 36px;
+    background: repeating-conic-gradient(#ccc 0% 25%, #222 0% 50%) 0 0 / 12px 12px;
+    opacity: 0.6;
+    z-index: 10;
 }
 
 .dust-effect {
@@ -1957,4 +2037,25 @@
 .quiz-btn:hover .opt-num {
     background: rgba(0, 240, 255, 0.2);
     color: #00f0ff;
+}
+
+/* 로비 나가기 버튼 */
+.btn-exit-lobby {
+    margin-top: 1rem;
+    padding: .55rem 1.5rem;
+    background: transparent;
+    border: 1px solid #334155;
+    color: #64748b;
+    border-radius: .5rem;
+    font-family: 'Orbitron', sans-serif;
+    font-size: .7rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 1px;
+    transition: all .2s;
+}
+.btn-exit-lobby:hover {
+    border-color: #ff2d75;
+    color: #ff2d75;
+    background: rgba(255, 45, 117, .06);
 }

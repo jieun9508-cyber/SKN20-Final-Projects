@@ -197,30 +197,54 @@ function buildPortfolio(formatId) {
   }
 
   // Logic Run 포맷
+  const gradeLabel = { S: '최상위', A: '우수', B: '양호', C: '기초', F: '도전' }[props.grade] || ''
+  const p1 = props.phase1Score ?? 0
+  const p2 = props.phase2Score ?? 0
+  const total = props.myScore ?? 0
+  const resultKo = props.resultText === 'WIN' ? '승리' : props.resultText === 'DRAW' ? '무승부' : '도전'
+
+  const strengthLines = props.strengths?.length
+    ? props.strengths.map(s => `- ${s}`).join('\n')
+    : ''
+  const weaknessLines = props.weaknesses?.length
+    ? props.weaknesses.map(w => `- ${w}`).join('\n')
+    : ''
+  const pseudoPreview = props.pseudocode
+    ? props.pseudocode.trim().split('\n').slice(0, 6).join('\n')
+    : ''
+
   if (formatId === 'linkedin') {
     return [
-      `💻 [${props.missionTitle || '알고리즘 설계'}] 비즈니스 로직을 구조화했습니다.`,
+      `💻 AICE 실전 대비 로직 설계 챌린지 — ${resultKo}!`,
       ``,
       `📌 과제 상황`,
-      props.scenario || '실무 시나리오 기반 의사코드 설계',
+      props.scenario || 'AICE 실전 시나리오 기반 의사코드 설계',
       ``,
-      `🔧 접근 방식`,
-      props.aiReview || '단계별 흐름을 분석하고 예외 처리까지 고려한 로직을 설계했습니다.',
+      `📊 결과`,
+      `Phase1 스피드 퀴즈: ${p1}점 / 40점`,
+      `Phase2 설계 스프린트: ${p2}점 / 60점`,
+      `총점 ${total}점 — 등급 ${props.grade}${gradeLabel ? ` (${gradeLabel})` : ''}`,
+      aiOneLine ? `\n💬 ${aiOneLine}` : '',
+      strengthLines ? `\n✨ 강점\n${strengthLines}` : '',
       ``,
-      `#알고리즘 #문제해결 #백엔드 #개발`,
-    ].join('\n').trim()
+      `#AICE #알고리즘 #의사코드 #문제해결 #개발역량`,
+    ].filter(l => l !== '').join('\n').trim()
   }
 
   return [
-    `📂 ${props.missionTitle || '비즈니스 로직 설계'}`,
+    `📂 AICE 실전 대비 — 비즈니스 로직 설계`,
     ``,
     `[상황]`,
-    props.scenario || '실무 시나리오 기반 의사코드 설계 과제.',
+    props.scenario || 'AICE 실전 시나리오 기반 의사코드 설계 과제.',
     ``,
-    `[설계 내용]`,
-    props.pseudocode ? props.pseudocode.slice(0, 300) : '단계별 처리 흐름을 설계하고 예외 상황을 처리했습니다.',
-    aiOneLine ? `\n[검토 결과]\n${aiOneLine}` : '',
-  ].filter(l => l !== null).join('\n').trim()
+    pseudoPreview ? `[작성한 의사코드 (일부)]\n${pseudoPreview}` : '',
+    ``,
+    `[결과]`,
+    `Phase1 ${p1}점 / Phase2 ${p2}점 → 총 ${total}점 (등급 ${props.grade})`,
+    aiOneLine ? `\n[AI 피드백]\n${aiOneLine}` : '',
+    strengthLines ? `\n[강점]\n${strengthLines}` : '',
+    weaknessLines ? `\n[개선점]\n${weaknessLines}` : '',
+  ].filter(l => l !== '').join('\n').trim()
 }
 
 // ─── 전체 생성 (동기, AI 없음) ──────────────────────────

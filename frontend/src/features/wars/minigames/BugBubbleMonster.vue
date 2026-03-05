@@ -46,6 +46,7 @@
         <button class="btn-start blink-border" :disabled="!bs.isReady.value" @click="startGame">
           {{ bs.isReady.value ? '▶ GAME START' : '상대 대기 중...' }}
         </button>
+        <button class="btn-back" @click="router.push('/practice/wars')">← 나가기</button>
       </div>
     </div>
 
@@ -163,7 +164,6 @@
         </div>
       </div>
 
-      <!-- 상대 공격 경고 알림 -->
       <transition name="alert-slide">
         <div v-if="incomingAlert" class="incoming-alert">
           <span class="alert-text">{{ incomingAlert }}</span>
@@ -175,14 +175,19 @@
         <div v-for="b in incomingBubbles" :key="'ib'+b.id" class="incoming-bubble"
           :class="{ 'ib-flying': b.phase === 'flying', 'ib-pop': b.phase === 'pop' }"
           :style="{ '--target-x': b.targetX + 'px', '--target-y': b.targetY + 'px', '--start-y': b.y + 'px' }">
-          <span class="ib-shell">🫧</span>
-          <span class="ib-inner">👾</span>
+          <div class="bubble-sphere ib-sphere">
+            <span class="bubble-monster">👾</span>
+          </div>
         </div>
         <div v-for="m in activeMonsters" :key="m.id" class="monster-bug"
           :style="{ left: m.x + 'px', top: m.y + 'px', fontSize: m.size + 'rem' }">👾</div>
         <transition-group name="bubble-fly" tag="div">
           <div v-for="b in flyingBubbles" :key="b.id" class="fly-bubble"
-            :style="{ left: b.x + 'px', top: b.y + 'px' }">🫧<span class="inner-bug">👾</span></div>
+            :style="{ left: b.x + 'px', top: b.y + 'px' }">
+            <div class="bubble-sphere">
+              <span class="bubble-monster">👾</span>
+            </div>
+          </div>
         </transition-group>
         <transition-group name="combo-pop" tag="div">
           <div v-for="p in comboPops" :key="p.id" class="combo-popup" :style="{ left: p.x, top: p.y }">{{ p.text }}</div>
@@ -240,18 +245,22 @@ const bestCombo = ref(0)
 const totalSolved = ref(0)
 const totalBubblesSent = ref(0)
 const shaking = ref(false)
-const incomingAlert = ref('')  // 상대 공격 경고
+const incomingAlert = ref('')
 const bubbleFlash = ref(false)
 let alertTimer = null
 let flyBubbleId = 0
 let combPopId = 0
 let animFrameId = null
+let _monsterSyncTimer = null
+let _initialSyncDone = false
 
 const allProblems = ref([])
 const currentProblemIndex = ref(0)
 const answerState = ref('idle')
 const showHint = ref(false)
 const selectedChoiceIdx = ref(-1)
+const incomingBubbles = ref([])
+let incomingBubbleId = 0
 
 const currentProblem = computed(() => allProblems.value[currentProblemIndex.value] || null)
 const buggyCodeLines = computed(() => {
@@ -261,7 +270,8 @@ const buggyCodeLines = computed(() => {
 
 function getFallbackProblems() {
   return [
-    { title: '서버 응답 점수 합산 에러', bug_type_name: 'TypeError', file_name: 'score_api.py', bug_line: 4,
+    {
+      title: '서버 응답 점수 합산 에러', bug_type_name: 'TypeError', file_name: 'score_api.py', bug_line: 4,
       buggy_code: 'import json\nresponse = \'{"score": "100", "bonus": 50}\'\ndata = json.loads(response)\ntotal = data["score"] + data["bonus"]\nprint(total)',
       error_log: 'TypeError: can only concatenate str (not "int") to str\nFile "score_api.py", line 4',
       hint: 'JSON에서 파싱한 score의 타입을 확인해보세요.',
@@ -270,8 +280,10 @@ function getFallbackProblems() {
         { label: 'total = data["score"] + str(data["bonus"])', correct: false },
         { label: 'total = str(data["score"] + data["bonus"])', correct: false },
         { label: 'total = data["score"].add(data["bonus"])', correct: false },
-      ]},
-    { title: '리스트 마지막 원소 접근 실패', bug_type_name: 'IndexError', file_name: 'data_loader.py', bug_line: 2,
+      ]
+    },
+    {
+      title: '리스트 마지막 원소 접근 실패', bug_type_name: 'IndexError', file_name: 'data_loader.py', bug_line: 2,
       buggy_code: 'batch = ["img1.png", "img2.png", "img3.png"]\nlast = batch[3]\nprint(f"마지막 배치: {last}")',
       error_log: 'IndexError: list index out of range\nFile "data_loader.py", line 2',
       hint: '리스트 인덱스는 0부터 시작합니다.',
@@ -280,8 +292,10 @@ function getFallbackProblems() {
         { label: 'last = batch[4]', correct: false },
         { label: 'last = batch.last()', correct: false },
         { label: 'last = batch[-0]', correct: false },
-      ]},
-    { title: '딕셔너리 키 누락 처리', bug_type_name: 'KeyError', file_name: 'config.py', bug_line: 3,
+      ]
+    },
+    {
+      title: '딕셔너리 키 누락 처리', bug_type_name: 'KeyError', file_name: 'config.py', bug_line: 3,
       buggy_code: 'config = {"host": "localhost", "port": 8080}\nhost = config["host"]\ndb = config["database"]',
       error_log: "KeyError: 'database'\nFile \"config.py\", line 3",
       hint: '존재하지 않는 키에 안전하게 접근하는 방법은?',
@@ -290,7 +304,8 @@ function getFallbackProblems() {
         { label: 'db = config["db"]', correct: false },
         { label: 'db = config.database', correct: false },
         { label: 'db = config or "default_db"', correct: false },
-      ]},
+      ]
+    },
   ].map(p => ({ ...p, choices: shuffleArray([...p.choices]) }))
 }
 
@@ -308,11 +323,9 @@ function joinRoom() {
   bs.connect(currentRoomId.value, auth.sessionNickname || 'Anonymous', auth.userAvatarUrl, auth.user?.id)
 }
 
+// [2026-03-05] 서버에 시작 신호만 보냄. 화면 전환은 bubble_gen_progress 첫 수신 시 처리
+// → 한 명이 눌러도 서버가 room 전체에 broadcast → 양쪽 모두 로딩 화면으로 전환
 function startGame() {
-  gamePhase.value = 'generating'
-  genPct.value = 0
-  genMsg.value = '서버에 연결 중...'
-  genLogs.value = [{ prefix: '$', msg: 'connecting to bug_factory...', file: '' }]
   bs.emitStart(currentRoomId.value)
 }
 
@@ -347,12 +360,15 @@ function selectChoice(idx) {
     totalSolved.value++
     spawnComboPopup()
     if (activeMonsters.value.length > 0) activeMonsters.value.pop()
-    launchBubble()
-    if (combo.value >= 3 && combo.value % 3 === 0) {
-      setTimeout(() => {
-        bs.emitFeverAttack(currentRoomId.value, 3)
-        spawnComboPopup('🔥 FEVER! +3')
-      }, 300)
+    if (combo.value > 0 && combo.value % 3 === 0) {
+      // 3콤보 달성 시 버블 3개 연속 (1개 대신 교체)
+      spawnComboPopup('🔥 3COMBO! ×3')
+      for (let i = 0; i < 3; i++) {
+        setTimeout(() => {
+          launchBubble()
+          bs.emitSendMonster(currentRoomId.value, 'normal')
+        }, i * 300)
+      }
     } else {
       bs.emitSendMonster(currentRoomId.value, 'normal')
     }
@@ -372,39 +388,40 @@ function selectChoice(idx) {
   }, 1200)
 }
 
-// 상대 버블 날아와서 터지면서 몬스터 스폰
-const incomingBubbles = ref([])
-let incomingBubbleId = 0
-
 function spawnIncomingBubble(monsterCount) {
   const id = ++incomingBubbleId
-  const targetX = 100 + Math.random() * (window.innerWidth * 0.5)
-  const targetY = 150 + Math.random() * (window.innerHeight * 0.4)
-  incomingBubbles.value.push({ id, x: window.innerWidth + 50, y: targetY, targetX, targetY, phase: 'flying' })
+  // 아바타 HUD 근처 우측 위에서 터짐
+  const targetX = window.innerWidth * 0.75 + (Math.random() - 0.5) * 60
+  const targetY = 60 + Math.random() * 40
+  incomingBubbles.value.push({ id, targetX, targetY, phase: 'flying' })
 
-  // 0.7초 후 도작 → 터짐
   setTimeout(() => {
     const b = incomingBubbles.value.find(b => b.id === id)
     if (b) b.phase = 'pop'
-    // 화면 빨간 플래시
     bubbleFlash.value = true
     setTimeout(() => { bubbleFlash.value = false }, 400)
-    // 터진 위치에서 몬스터 스폰 (버블 위치 기준)
+
+    // 버블 터진 자리에서 몬스터가 사방으로 튀쳐나오는 효과
     for (let i = 0; i < monsterCount; i++) {
-      activeMonsters.value.push({
-        id: Date.now() + Math.random(),
-        x: targetX + (Math.random() - 0.5) * 80,
-        y: targetY + (Math.random() - 0.5) * 80,
-        dx: (Math.random() - 0.5) * 3, dy: (Math.random() - 0.5) * 3,
-        size: 1.5 + Math.random() * 0.8
-      })
+      const angle = (2 * Math.PI / monsterCount) * i + Math.random() * 0.5
+      const speed = 4 + Math.random() * 3
+      const m = {
+        id: Date.now() + Math.random() + i,
+        x: targetX,
+        y: targetY,
+        dx: Math.cos(angle) * speed,
+        dy: Math.sin(angle) * speed,
+        size: 1.5 + Math.random() * 0.8,
+        // 스폰 직후 바람저항 있게 (0.5초 후 슬로우다운)
+        spawnTime: Date.now()
+      }
+      activeMonsters.value.push(m)
     }
-    // 게임오버 판정
+
     if (activeMonsters.value.length >= maxMonsters && gamePhase.value === 'playing') {
       gamePhase.value = 'gameover-pending'
       bs.emitGameOver(currentRoomId.value)
     }
-    // 0.6초 후 버블 제거
     setTimeout(() => {
       incomingBubbles.value = incomingBubbles.value.filter(b => b.id !== id)
     }, 600)
@@ -419,7 +436,14 @@ function showAlert(msg) {
 
 function nextProblem() {
   if (allProblems.value.length === 0) return
-  currentProblemIndex.value = (currentProblemIndex.value + 1) % allProblems.value.length
+  const next = currentProblemIndex.value + 1
+  if (next >= allProblems.value.length) {
+    // 다 풀면 셔플 후 재시작 (같은 순서로 반복 안 되게)
+    allProblems.value = shuffleArray([...allProblems.value])
+    currentProblemIndex.value = 0
+  } else {
+    currentProblemIndex.value = next
+  }
 }
 
 function launchBubble() {
@@ -447,7 +471,7 @@ function spawnMonsters(count) {
     })
   }
   if (activeMonsters.value.length >= maxMonsters && gamePhase.value === 'playing') {
-    gamePhase.value = 'gameover-pending'  // 즉시 입력 차단
+    gamePhase.value = 'gameover-pending'
     bs.emitGameOver(currentRoomId.value)
   }
 }
@@ -456,11 +480,26 @@ function startGameLoop() {
   function loop() {
     if (gamePhase.value !== 'playing') return
     const W = window.innerWidth * 0.9, H = window.innerHeight * 0.75
+    const now = Date.now()
     activeMonsters.value.forEach(m => {
+      // 스폰 직후 0.6초동안 바람저항으로 감속, 그 후 일반 방황전환
+      if (m.spawnTime) {
+        const elapsed = now - m.spawnTime
+        if (elapsed < 600) {
+          m.dx *= 0.93
+          m.dy *= 0.93
+        } else {
+          // 속도가 일반 순항 수준으로 떨어지면 spawnTime 제거
+          if (Math.abs(m.dx) < 2.5) m.dx = (Math.random() - 0.5) * 3
+          if (Math.abs(m.dy) < 2.5) m.dy = (Math.random() - 0.5) * 3
+          delete m.spawnTime
+        }
+      } else {
+        if (Math.random() < 0.015) { m.dx = (Math.random() - 0.5) * 3; m.dy = (Math.random() - 0.5) * 3 }
+      }
       m.x += m.dx; m.y += m.dy
       if (m.x < 0 || m.x > W) m.dx *= -1
       if (m.y < 80 || m.y > H) m.dy *= -1
-      if (Math.random() < 0.015) { m.dx = (Math.random() - 0.5) * 3; m.dy = (Math.random() - 0.5) * 3 }
     })
     animFrameId = requestAnimationFrame(loop)
   }
@@ -478,7 +517,15 @@ function resetAndRestart() {
 }
 
 onMounted(() => {
+  // [2026-03-05] bubble_gen_progress 첫 수신 시 양쪽 화면 전환
+  // 버튼 누른 사람 = 서버로 emit → 서버가 room broadcast → 상대도 여기서 수신 → 둘 다 generating 화면으로
   bs.onGenProgress.value = (data) => {
+    if (gamePhase.value === 'lobby') {
+      gamePhase.value = 'generating'
+      genPct.value = 0
+      genMsg.value = '버그 배치 중...'
+      genLogs.value = [{ prefix: '$', msg: 'connecting to bug_factory...', file: '' }]
+    }
     genPct.value = data.pct || genPct.value
     genMsg.value = data.msg || genMsg.value
     addGenLog(data.msg, data.file || '')
@@ -498,8 +545,10 @@ onMounted(() => {
 
     setTimeout(() => {
       gamePhase.value = 'playing'
+      _initialSyncDone = false
       spawnMonsters(3)
-      opponentMonsterCount.value = 3
+      opponentMonsterCount.value = 0
+      setTimeout(() => { _initialSyncDone = true }, 1500)
       startGameLoop()
     }, 800)
   }
@@ -508,15 +557,9 @@ onMounted(() => {
     showAlert('⚠️ 상대 공격!')
     spawnIncomingBubble(1)
   }
-  bs.onReceiveFever.value = (data) => {
-    const cnt = data.count || 3
-    showAlert(`🔥 FEVER 공격! 몬스터 ${cnt}마리!`)
-    shaking.value = true
-    setTimeout(() => shaking.value = false, 600)
-    spawnIncomingBubble(cnt)
-  }
 
   bs.onMonsterSync.value = (data) => {
+    if (!_initialSyncDone) return
     if (!data?.counts || !bs.socket.value) return
     const myId = bs.socket.value.id
     for (const [sid, count] of Object.entries(data.counts)) {
@@ -532,7 +575,6 @@ onMounted(() => {
   }
 })
 
-let _monsterSyncTimer = null
 watch(() => activeMonsters.value.length, (newLen) => {
   if (gamePhase.value !== 'playing' || !currentRoomId.value) return
   if (_monsterSyncTimer) clearTimeout(_monsterSyncTimer)
@@ -656,12 +698,12 @@ onUnmounted(() => {
 .problem-panel.pulse-warning { border-color:#ff2d75; box-shadow:0 0 20px rgba(255,45,117,.2) }
 .prob-header { display:flex; align-items:center; gap:.4rem; flex-wrap:wrap }
 .prob-badge { background:rgba(0,240,255,.08); color:#00f0ff; border:1px solid rgba(0,240,255,.3); padding:2px 10px; border-radius:20px; font-size:.6rem; font-weight:bold; font-family:'Orbitron',sans-serif; letter-spacing:1px }
-.bug-type-badge { background:rgba(255,45,117,.08); color:#ff2d75; border:1px solid rgba(255,45,117,.3); padding:2px 8px; border-radius:20px; font-size:.6rem; font-weight:bold; font-family:'Orbitron',sans-serif }
+.bug-type-badge { background:rgba(139,92,246,.12); color:#a78bfa; border:1px solid rgba(139,92,246,.4); padding:2px 8px; border-radius:20px; font-size:.6rem; font-weight:bold; font-family:'Orbitron',sans-serif }
 .prob-file { color:#64748b; font-size:.7rem; margin-left:auto; font-family:monospace }
 
-.error-log { background:rgba(0,0,0,.4); border:1px solid rgba(255,45,117,.2); border-radius:8px; padding:.4rem .6rem }
-.log-label { color:#ff2d75; font-size:.55rem; font-weight:bold; margin-bottom:3px; font-family:'Orbitron',sans-serif; letter-spacing:1px }
-.error-log pre { font-size:.68rem; color:#ff2d75; margin:0; white-space:pre-wrap; line-height:1.5 }
+.error-log { background:rgba(0,0,0,.4); border:1px solid rgba(251,146,60,.25); border-radius:8px; padding:.4rem .6rem }
+.log-label { color:#ffffff; font-size:.55rem; font-weight:bold; margin-bottom:4px; font-family:'Orbitron',sans-serif; letter-spacing:1px; background:rgba(251,146,60,.3); display:inline-block; padding:1px 6px; border-radius:3px }
+.error-log pre { font-size:.68rem; color:#94a3b8; margin:0; white-space:pre-wrap; line-height:1.5 }
 
 .code-block { border-radius:8px; overflow:hidden }
 .code-head { background:#0a0f1e; padding:.35rem .65rem; display:flex; align-items:center; gap:6px; border-bottom:1px solid rgba(0,240,255,.06) }
@@ -699,10 +741,61 @@ onUnmounted(() => {
 .monster-overlay { position:fixed; inset:0; pointer-events:none; z-index:30; overflow:hidden }
 .monster-bug { position:absolute; user-select:none; filter:drop-shadow(0 0 8px rgba(255,123,114,.6)); animation:monster-wobble 2s infinite }
 @keyframes monster-wobble { 0%,100%{transform:rotate(-5deg)} 50%{transform:rotate(5deg)} }
-.fly-bubble { position:absolute; font-size:2.5rem; filter:drop-shadow(0 0 12px rgba(0,240,255,.8)) }
-.inner-bug { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:1.2rem }
-.bubble-fly-enter-active { animation: fly-right .8s cubic-bezier(.4,0,.2,1) forwards }
-@keyframes fly-right { 0%{transform:translate(0,0) scale(1);opacity:1} 50%{transform:translate(250px,-80px) scale(.9);opacity:.9} 100%{transform:translate(600px,-30px) scale(.5);opacity:0} }
+
+/* ── 유리 구슬 버블 ── */
+.bubble-sphere {
+  position: relative;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 35% 30%,
+    rgba(255,255,255,0.55) 0%,
+    rgba(0,240,255,0.18) 40%,
+    rgba(0,180,255,0.08) 70%,
+    transparent 100%
+  );
+  border: 1.5px solid rgba(0,240,255,0.5);
+  box-shadow:
+    0 0 12px rgba(0,240,255,0.5),
+    0 0 28px rgba(0,240,255,0.25),
+    inset 0 0 10px rgba(0,240,255,0.15);
+  display: flex; align-items: center; justify-content: center;
+  animation: bubble-float 1.8s ease-in-out infinite;
+}
+.bubble-sphere::before {
+  content: '';
+  position: absolute;
+  top: 10%; left: 18%;
+  width: 28%; height: 18%;
+  background: rgba(255,255,255,0.6);
+  border-radius: 50%;
+  filter: blur(2px);
+  transform: rotate(-30deg);
+}
+.bubble-monster {
+  font-size: 1.5rem;
+  filter: drop-shadow(0 0 4px rgba(0,0,0,0.6));
+  animation: monster-trapped 1.6s ease-in-out infinite;
+}
+@keyframes bubble-float {
+  0%,100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-5px) scale(1.04); }
+}
+@keyframes monster-trapped {
+  0%,100% { transform: scale(1) rotate(-5deg); }
+  50% { transform: scale(0.9) rotate(5deg); }
+}
+
+/* 날아가는 버블 */
+.fly-bubble { position: absolute; }
+.fly-bubble .bubble-sphere { width: 52px; height: 52px; }
+.bubble-fly-enter-active { animation: fly-right .8s cubic-bezier(.4,0,.2,1) forwards; }
+@keyframes fly-right {
+  0%   { transform: translate(0,0) scale(1); opacity: 1; }
+  50%  { transform: translate(250px,-80px) scale(.9); opacity: .9; }
+  100% { transform: translate(600px,-30px) scale(.5); opacity: 0; }
+}
+
 .combo-popup { position:absolute; font-size:1.1rem; font-weight:900; color:#fbbf24; text-shadow:0 0 10px rgba(251,191,36,.8); white-space:nowrap; pointer-events:none }
 .combo-pop-enter-active { animation: pop-up 1s ease-out forwards }
 @keyframes pop-up { 0%{opacity:1;transform:translateY(0) scale(1)} 100%{opacity:0;transform:translateY(-60px) scale(1.3)} }
@@ -723,13 +816,13 @@ onUnmounted(() => {
 .btn-retry:hover { background:rgba(0,240,255,.1) }
 .btn-exit { flex:1; max-width:180px; padding:.6rem; font-family:'Orbitron',sans-serif; font-size:.75rem; font-weight:700; background:transparent; border:1px solid #334155; color:#64748b; border-radius:.6rem; cursor:pointer }
 
-/* 수신 버블 애니메이션 */
-.incoming-bubble { position:absolute; z-index:35; font-size:5rem; pointer-events:none }
-.ib-shell { position:relative; z-index:1; filter:drop-shadow(0 0 20px rgba(0,240,255,.6)) }
-.ib-inner { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:2.2rem; z-index:2 }
+/* 수신 버블 */
+.incoming-bubble { position:absolute; z-index:35; pointer-events:none; }
+.ib-sphere { width: 72px; height: 72px; }
+.ib-sphere .bubble-monster { font-size: 2rem; }
 .ib-flying { animation: ib-fly .7s cubic-bezier(.2,.8,.3,1) forwards }
-.ib-pop .ib-shell { animation: ib-burst-shell .6s ease-out forwards }
-.ib-pop .ib-inner { animation: ib-burst-monster .6s ease-out forwards }
+.ib-pop .ib-sphere { animation: ib-burst-shell .6s ease-out forwards }
+.ib-pop .bubble-monster { animation: ib-burst-monster .6s ease-out forwards }
 .ib-pop::after { content:''; position:absolute; top:50%; left:50%; width:200px; height:200px; transform:translate(-50%,-50%); border-radius:50%; background:radial-gradient(circle, rgba(255,45,117,.5) 0%, rgba(255,45,117,0) 70%); animation: ib-shockwave .6s ease-out forwards; pointer-events:none }
 @keyframes ib-fly {
   0% { right:-80px; top:var(--start-y); opacity:0; transform:scale(.5) }
@@ -750,11 +843,9 @@ onUnmounted(() => {
   0% { width:0; height:0; opacity:1 }
   100% { width:300px; height:300px; opacity:0 }
 }
-/* 버블 터질 때 화면 빨간 플래시 */
 .bubble-flash::after { content:''; position:fixed; inset:0; background:rgba(255,45,117,.15); z-index:9000; pointer-events:none; animation:bflash .4s ease-out forwards }
 @keyframes bflash { 0%{opacity:1} 100%{opacity:0} }
 
-/* 상대 공격 경고 알림 */
 .incoming-alert { position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:50; background:rgba(255,45,117,.15); border:2px solid #ff2d75; border-radius:12px; padding:.5rem 1.5rem; backdrop-filter:blur(8px); box-shadow:0 0 30px rgba(255,45,117,.3); animation:alert-pulse .4s ease infinite alternate }
 .alert-text { font-family:'Orbitron',sans-serif; font-size:.85rem; font-weight:700; color:#ff2d75; letter-spacing:1px; text-shadow:0 0 10px rgba(255,45,117,.6) }
 @keyframes alert-pulse { from{box-shadow:0 0 15px rgba(255,45,117,.2)} to{box-shadow:0 0 40px rgba(255,45,117,.5)} }

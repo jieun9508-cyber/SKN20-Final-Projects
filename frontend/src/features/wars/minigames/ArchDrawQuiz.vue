@@ -50,6 +50,7 @@
         <div class="lobby-info" v-if="!ds.connected.value">연결 중...</div>
         <button v-if="ds.isReady.value" @click="beginGame" class="btn-start blink-border">▶ GAME START</button>
         <button v-else-if="!ds.connected.value" class="btn-start" disabled>연결 중...</button>
+        <button @click="$router.push('/practice/wars')" class="btn-exit-lobby">← 나가기</button>
         <div class="game-guide-container">
           <div class="guide-item">
             <div class="gi-num">01</div>

@@ -135,6 +135,201 @@ FALLBACK_PROBLEMS = [
             {"label": "break", "correct": False},
         ],
     },
+    {
+        "title": "pandas 컬럼 대소문자 불일치", "bug_type_name": "KeyError",
+        "file_name": "preprocess.py", "bug_line": 4,
+        "buggy_code": 'import pandas as pd\ndf = pd.read_csv("data.csv")\n# 컬럼명: Age, Name, Score\nprint(df["age"].mean())',
+        "error_log": "KeyError: 'age'\nFile \"preprocess.py\", line 4",
+        "hint": "CSV 컬럼명의 대소문자를 확인해보세요.",
+        "choices": [
+            {"label": 'print(df["Age"].mean())', "correct": True},
+            {"label": 'print(df.age.mean())', "correct": False},
+            {"label": 'print(df[["age"]].mean())', "correct": False},
+            {"label": 'print(df.get("age").mean())', "correct": False},
+        ],
+    },
+    {
+        "title": "numpy shape 불일치 행렬곱", "bug_type_name": "ValueError",
+        "file_name": "model_layer.py", "bug_line": 4,
+        "buggy_code": 'import numpy as np\nA = np.ones((3, 4))\nB = np.ones((3, 5))\nresult = np.dot(A, B)\nprint(result.shape)',
+        "error_log": "ValueError: shapes (3,4) and (3,5) not aligned\nFile \"model_layer.py\", line 4",
+        "hint": "행렬곱에서 앞 행렬의 열 수와 뒤 행렬의 행 수가 일치해야 합니다.",
+        "choices": [
+            {"label": "B = np.ones((4, 5))", "correct": True},
+            {"label": "B = np.ones((3, 4))", "correct": False},
+            {"label": "result = np.dot(A, B.T)", "correct": False},
+            {"label": "result = A * B", "correct": False},
+        ],
+    },
+    {
+        "title": "문자열 포맷 타입 에러", "bug_type_name": "TypeError",
+        "file_name": "report.py", "bug_line": 3,
+        "buggy_code": 'accuracy = 0.9234\nepochs = 10\nprint("Accuracy: " + accuracy + " after " + epochs + " epochs")',
+        "error_log": 'TypeError: can only concatenate str (not "float") to str\nFile "report.py", line 3',
+        "hint": "숫자를 문자열과 합치려면 변환이 필요합니다.",
+        "choices": [
+            {"label": 'print(f"Accuracy: {accuracy} after {epochs} epochs")', "correct": True},
+            {"label": 'print("Accuracy: ", accuracy, " after ", epochs)', "correct": False},
+            {"label": 'print("Accuracy: " + str(accuracy + epochs))', "correct": False},
+            {"label": 'print("Accuracy: " + accuracy)', "correct": False},
+        ],
+    },
+    {
+        "title": "환경변수 누락으로 API 키 없음", "bug_type_name": "TypeError",
+        "file_name": "openai_client.py", "bug_line": 4,
+        "buggy_code": 'import os\nfrom openai import OpenAI\napi_key = os.getenv("OPENAI_API_KEY")\nclient = OpenAI(api_key=api_key)\nresponse = client.chat.completions.create(model="gpt-4o")',
+        "error_log": "openai.AuthenticationError: No API key provided\nFile \"openai_client.py\", line 4",
+        "hint": "getenv는 키가 없으면 None을 반환합니다.",
+        "choices": [
+            {"label": 'api_key = os.getenv("OPENAI_API_KEY") or raise ValueError("키 없음")', "correct": False},
+            {"label": 'if not api_key: raise ValueError("OPENAI_API_KEY not set")', "correct": True},
+            {"label": 'api_key = os.environ["OPENAI_API_KEY"]', "correct": False},
+            {"label": 'api_key = "hardcoded-key"', "correct": False},
+        ],
+    },
+    {
+        "title": "DataFrame 필터링 후 인덱스 접근", "bug_type_name": "KeyError",
+        "file_name": "filter_data.py", "bug_line": 5,
+        "buggy_code": 'import pandas as pd\ndf = pd.DataFrame({"score": [80, 90, 70], "pass": [True, True, False]})\npassed = df[df["pass"] == True]\nfirst_score = passed[0]["score"]\nprint(first_score)',
+        "error_log": "KeyError: 0\nFile \"filter_data.py\", line 4",
+        "hint": "필터링 후 인덱스는 원본 DataFrame의 인덱스를 유지합니다.",
+        "choices": [
+            {"label": 'first_score = passed.iloc[0]["score"]', "correct": True},
+            {"label": 'first_score = passed.loc[0]["score"]', "correct": False},
+            {"label": 'first_score = passed["score"][0]', "correct": False},
+            {"label": 'first_score = passed.reset_index()[0]', "correct": False},
+        ],
+    },
+    {
+        "title": "리스트 컴프리헨션 조건 위치 오류", "bug_type_name": "SyntaxError",
+        "file_name": "filter_list.py", "bug_line": 2,
+        "buggy_code": 'numbers = [1, 2, 3, 4, 5, 6]\nevens = [if x % 2 == 0 x for x in numbers]\nprint(evens)',
+        "error_log": "SyntaxError: invalid syntax\nFile \"filter_list.py\", line 2",
+        "hint": "리스트 컴프리헨션에서 if 조건의 위치를 확인하세요.",
+        "choices": [
+            {"label": "evens = [x for x in numbers if x % 2 == 0]", "correct": True},
+            {"label": "evens = [x if x % 2 == 0 for x in numbers]", "correct": False},
+            {"label": "evens = [x for x in numbers where x % 2 == 0]", "correct": False},
+            {"label": "evens = filter(x % 2 == 0, numbers)", "correct": False},
+        ],
+    },
+    {
+        "title": "sklearn train_test_split 비율 오류", "bug_type_name": "ValueError",
+        "file_name": "split_data.py", "bug_line": 4,
+        "buggy_code": 'from sklearn.model_selection import train_test_split\nimport numpy as np\nX = np.arange(100)\nX_train, X_test = train_test_split(X, test_size=80)\nprint(len(X_train))',
+        "error_log": "ValueError: test_size=80 should be either positive and smaller than the number of samples 100\nFile \"split_data.py\", line 4",
+        "hint": "test_size에 정수를 넣으면 샘플 수, 소수를 넣으면 비율입니다.",
+        "choices": [
+            {"label": "X_train, X_test = train_test_split(X, test_size=0.2)", "correct": True},
+            {"label": "X_train, X_test = train_test_split(X, test_size=0.8)", "correct": False},
+            {"label": "X_train, X_test = train_test_split(X, train_size=80)", "correct": False},
+            {"label": "X_train, X_test = train_test_split(X, test_size=20)", "correct": False},
+        ],
+    },
+    {
+        "title": "PyTorch 텐서 gradient 누적", "bug_type_name": "LogicError",
+        "file_name": "train_loop.py", "bug_line": 6,
+        "buggy_code": 'import torch\nmodel = torch.nn.Linear(10, 1)\noptimizer = torch.optim.SGD(model.parameters(), lr=0.01)\nfor i in range(3):\n    loss = model(torch.randn(10)).sum()\n    loss.backward()\n    optimizer.step()',
+        "error_log": "RuntimeError: gradient accumulates across iterations\nGradient grows unexpectedly",
+        "hint": "매 iteration마다 gradient를 초기화해야 합니다.",
+        "choices": [
+            {"label": "optimizer.zero_grad() 를 loss.backward() 전에 추가", "correct": True},
+            {"label": "optimizer.step() 을 제거", "correct": False},
+            {"label": "loss.detach() 후 backward()", "correct": False},
+            {"label": "model.zero_grad() 를 optimizer.step() 후에 추가", "correct": False},
+        ],
+    },
+    {
+        "title": "파일 경로 역슬래시 에러", "bug_type_name": "SyntaxError",
+        "file_name": "load_model.py", "bug_line": 2,
+        "buggy_code": 'import torch\npath = "C:\\Users\\model\\best.pt"\nmodel = torch.load(path)',
+        "error_log": "SyntaxError: (unicode error) 'unicodeescape' codec\nFile \"load_model.py\", line 2",
+        "hint": "Windows 경로에서 역슬래시는 이스케이프 문자로 처리됩니다.",
+        "choices": [
+            {"label": 'path = r"C:\\Users\\model\\best.pt"', "correct": True},
+            {"label": 'path = "C://Users//model//best.pt"', "correct": False},
+            {"label": 'path = "C:/Users/model/best.pt"', "correct": False},
+            {"label": 'path = os.path.join("C:", "Users", "model", "best.pt")', "correct": False},
+        ],
+    },
+    {
+        "title": "재귀 함수 기저 조건 누락", "bug_type_name": "RecursionError",
+        "file_name": "factorial.py", "bug_line": 2,
+        "buggy_code": 'def factorial(n):\n    return n * factorial(n - 1)\n\nprint(factorial(5))',
+        "error_log": "RecursionError: maximum recursion depth exceeded\nFile \"factorial.py\", line 2",
+        "hint": "재귀 함수에는 반드시 종료 조건이 필요합니다.",
+        "choices": [
+            {"label": "if n <= 1: return 1 을 첫 줄에 추가", "correct": True},
+            {"label": "if n == 0: return n 을 첫 줄에 추가", "correct": False},
+            {"label": "return n * factorial(n + 1)", "correct": False},
+            {"label": "sys.setrecursionlimit(10000) 추가", "correct": False},
+        ],
+    },
+    {
+        "title": "f-string 중괄호 이스케이프", "bug_type_name": "ValueError",
+        "file_name": "template.py", "bug_line": 2,
+        "buggy_code": 'name = "Alice"\nmsg = f"Hello {name}! Your score is {85}%"\nprint(msg)',
+        "error_log": "정상 동작하지만 % 기호가 dict format으로 오해될 수 있음",
+        "hint": "f-string 안에서 중괄호를 리터럴로 출력하려면 두 번 써야 합니다.",
+        "choices": [
+            {"label": 'msg = f"Hello {name}! Score: {{85}}%"', "correct": False},
+            {"label": 'msg = f"Hello {name}! Score: {85}%"', "correct": True},
+            {"label": 'msg = "Hello %s! Score: %d%%" % (name, 85)', "correct": False},
+            {"label": 'msg = f"Hello " + name + "! Score: 85%"', "correct": False},
+        ],
+    },
+    {
+        "title": "glob 패턴 파일 없음", "bug_type_name": "FileNotFoundError",
+        "file_name": "batch_load.py", "bug_line": 4,
+        "buggy_code": 'import glob\nfiles = glob.glob("data/*.CSV")\nfor f in files:\n    print(f)',
+        "error_log": "No files matched — files list is empty\nFile \"batch_load.py\", line 3",
+        "hint": "Linux/Mac에서 glob 패턴은 대소문자를 구분합니다.",
+        "choices": [
+            {"label": 'files = glob.glob("data/*.csv")', "correct": True},
+            {"label": 'files = glob.glob("data/**")', "correct": False},
+            {"label": 'files = glob.glob("data/")', "correct": False},
+            {"label": 'files = glob.glob("*.CSV", recursive=True)', "correct": False},
+        ],
+    },
+    {
+        "title": "zip 길이 불일치 데이터 손실", "bug_type_name": "LogicError",
+        "file_name": "pair_data.py", "bug_line": 3,
+        "buggy_code": 'labels = [0, 1, 2, 3, 4]\nfeatures = [[1,2], [3,4], [5,6]]\npairs = list(zip(labels, features))\nprint(len(pairs))',
+        "error_log": "출력: 3 (기대값: 5)\n데이터 손실 발생",
+        "hint": "zip은 가장 짧은 iterable 기준으로 멈춥니다.",
+        "choices": [
+            {"label": "from itertools import zip_longest; pairs = list(zip_longest(labels, features))", "correct": True},
+            {"label": "pairs = list(zip(features, labels))", "correct": False},
+            {"label": "pairs = [(labels[i], features[i]) for i in range(len(labels))]", "correct": False},
+            {"label": "pairs = list(map(zip, labels, features))", "correct": False},
+        ],
+    },
+    {
+        "title": "클래스 메서드 self 누락", "bug_type_name": "TypeError",
+        "file_name": "model_class.py", "bug_line": 4,
+        "buggy_code": 'class Predictor:\n    def __init__(self, threshold):\n        self.threshold = threshold\n    def predict(score):\n        return score > self.threshold\n\np = Predictor(0.5)\nprint(p.predict(0.8))',
+        "error_log": "TypeError: predict() takes 1 positional argument but 2 were given\nFile \"model_class.py\", line 4",
+        "hint": "인스턴스 메서드의 첫 번째 인자는 항상 self여야 합니다.",
+        "choices": [
+            {"label": "def predict(self, score):", "correct": True},
+            {"label": "def predict(score, self):", "correct": False},
+            {"label": "@staticmethod\ndef predict(score):", "correct": False},
+            {"label": "def predict(cls, score):", "correct": False},
+        ],
+    },
+    {
+        "title": "JSON dumps 직렬화 불가 타입", "bug_type_name": "TypeError",
+        "file_name": "serialize.py", "bug_line": 4,
+        "buggy_code": 'import json\nimport numpy as np\nresult = {"scores": np.array([0.9, 0.8, 0.7])}\nprint(json.dumps(result))',
+        "error_log": "TypeError: Object of type ndarray is not JSON serializable\nFile \"serialize.py\", line 4",
+        "hint": "numpy 배열은 기본 JSON 직렬화가 되지 않습니다.",
+        "choices": [
+            {"label": 'result = {"scores": np.array([0.9, 0.8, 0.7]).tolist()}', "correct": True},
+            {"label": 'print(json.dumps(result, indent=2))', "correct": False},
+            {"label": 'print(json.dumps(str(result)))', "correct": False},
+            {"label": 'result["scores"] = list(result["scores"])', "correct": False},
+        ],
+    },
 ]
 
 
@@ -202,11 +397,17 @@ async def generate_bug_problems(count: int = 10, difficulty: int = 1) -> List[Di
     except Exception as e:
         logger.error(f"[BugGen] GPT 호출 실패: {e}")
 
-    if len(problems) < 5:
+    if len(problems) < 20:
         fallback = [_clean_problem(dict(p), len(problems) + i + 1)
                     for i, p in enumerate(FALLBACK_PROBLEMS)]
         random.shuffle(fallback)
-        problems.extend(fallback[:max(0, 5 - len(problems))])
+        needed = 20 - len(problems)
+        # fallback이 부족하면 반복해서 체움
+        while len(fallback) < needed:
+            extra = [_clean_problem(dict(p), 0) for p in FALLBACK_PROBLEMS]
+            random.shuffle(extra)
+            fallback.extend(extra)
+        problems.extend(fallback[:needed])
 
     random.shuffle(problems)
     return problems

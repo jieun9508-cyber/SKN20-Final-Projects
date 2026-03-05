@@ -704,41 +704,55 @@ async def bubble_sync(sid, data):
 @sio.event
 async def bubble_start(sid, data):
     room_id = data.get('room_id')
-    if room_id in bubble_rooms:
-        bubble_rooms[room_id]['is_playing'] = True
+    if room_id not in bubble_rooms:
+        return
+    room = bubble_rooms[room_id]
+    # [2026-03-05] 중복 시작 방지: 두 명이 각자 눌러도 한 번만 실행
+    if room.get('is_playing'):
+        print(f"⚠️ [BugBubble] Room {room_id} already started, ignoring from {sid}")
+        return
+    room['is_playing'] = True
 
-        # [2026-03-04] AI 문제 동적 생성 + 진행상황 실시간 전송
-        print(f"🧠 [BugBubble] AI 문제 생성 시작 (room: {room_id})")
+    # [2026-03-04] AI 문제 동적 생성 + 진행상황 실시간 전송
+    print(f"🧠 [BugBubble] AI 문제 생성 시작 (room: {room_id})")
+    await sio.emit('bubble_gen_progress', {
+        'step': 1, 'pct': 10, 'msg': '버그 카테고리 분석 중...', 'file': 'categories.json'
+    }, room=room_id)
+
+    try:
         await sio.emit('bubble_gen_progress', {
-            'step': 1, 'pct': 10, 'msg': '버그 카테고리 분석 중...', 'file': 'categories.json'
+            'step': 2, 'pct': 30, 'msg': 'AI가 버그 코드 생성 중...', 'file': 'bug_factory.py'
         }, room=room_id)
 
-        try:
-            await sio.emit('bubble_gen_progress', {
-                'step': 2, 'pct': 30, 'msg': 'AI가 버그 코드 생성 중...', 'file': 'bug_factory.py'
-            }, room=room_id)
+        # 난이도 골고루 섞기: 기초 8 + 중급 8 + 실무 4
+        import asyncio
+        p1, p2, p3 = await asyncio.gather(
+            generate_bug_problems(count=8, difficulty=1),
+            generate_bug_problems(count=8, difficulty=2),
+            generate_bug_problems(count=4, difficulty=3),
+        )
+        problems = p1 + p2 + p3
+        random.shuffle(problems)
 
-            problems = await generate_bug_problems(count=10, difficulty=1)
+        await sio.emit('bubble_gen_progress', {
+            'step': 3, 'pct': 75, 'msg': f'{len(problems)}개 문제 검증 중...', 'file': 'validator.py'
+        }, room=room_id)
 
-            await sio.emit('bubble_gen_progress', {
-                'step': 3, 'pct': 75, 'msg': f'{len(problems)}개 문제 검증 중...', 'file': 'validator.py'
-            }, room=room_id)
+        await asyncio.sleep(0.5)
 
-            await asyncio.sleep(0.5)
+        await sio.emit('bubble_gen_progress', {
+            'step': 4, 'pct': 95, 'msg': '선택지 셔플 완료 — 버그 배치 준비!', 'file': 'deploy_bugs.sh'
+        }, room=room_id)
 
-            await sio.emit('bubble_gen_progress', {
-                'step': 4, 'pct': 95, 'msg': '선택지 셔플 완료 — 버그 배치 준비!', 'file': 'deploy_bugs.sh'
-            }, room=room_id)
+        print(f"✅ [BugBubble] {len(problems)}개 문제 생성 완료")
+    except Exception as e:
+        print(f"⚠️ [BugBubble] 문제 생성 실패, 폴백 사용: {e}")
+        problems = []
+        await sio.emit('bubble_gen_progress', {
+            'step': 4, 'pct': 95, 'msg': '폴백 문제 로드 중...', 'file': 'fallback.json'
+        }, room=room_id)
 
-            print(f"✅ [BugBubble] {len(problems)}개 문제 생성 완료")
-        except Exception as e:
-            print(f"⚠️ [BugBubble] 문제 생성 실패, 폴백 사용: {e}")
-            problems = []
-            await sio.emit('bubble_gen_progress', {
-                'step': 4, 'pct': 95, 'msg': '폴백 문제 로드 중...', 'file': 'fallback.json'
-            }, room=room_id)
-
-        await sio.emit('bubble_game_start', {'problems': problems}, room=room_id)
+    await sio.emit('bubble_game_start', {'problems': problems}, room=room_id)
 
 @sio.event
 async def bubble_send_monster(sid, data):
