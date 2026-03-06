@@ -1,0 +1,242 @@
+[
+  {
+    "sample_id": "quest1_excellent",
+    "quality": "excellent",
+    "llm_mean": 79.8,
+    "llm_std": 0.447,
+    "hybrid_mean": 77.8,
+    "hybrid_std": 0.447
+  },
+  {
+    "sample_id": "quest1_good",
+    "quality": "good",
+    "llm_mean": 79.2,
+    "llm_std": 0.837,
+    "hybrid_mean": 75.2,
+    "hybrid_std": 0.837
+  },
+  {
+    "sample_id": "quest1_average",
+    "quality": "average",
+    "llm_mean": 72.4,
+    "llm_std": 4.93,
+    "hybrid_mean": 71.6,
+    "hybrid_std": 4.099
+  },
+  {
+    "sample_id": "quest1_poor",
+    "quality": "poor",
+    "llm_mean": 51.4,
+    "llm_std": 4.278,
+    "hybrid_mean": 45,
+    "hybrid_std": 3.742
+  },
+  {
+    "sample_id": "quest1_very_poor",
+    "quality": "very_poor",
+    "llm_mean": 36.4,
+    "llm_std": 3.13,
+    "hybrid_mean": 35,
+    "hybrid_std": 2.646
+  },
+  {
+    "sample_id": "quest2_excellent",
+    "quality": "excellent",
+    "llm_mean": 85,
+    "llm_std": 0.0,
+    "hybrid_mean": 86,
+    "hybrid_std": 0.0
+  },
+  {
+    "sample_id": "quest2_good",
+    "quality": "good",
+    "llm_mean": 73,
+    "llm_std": 5.196,
+    "hybrid_mean": 74.2,
+    "hybrid_std": 4.382
+  },
+  {
+    "sample_id": "quest2_average",
+    "quality": "average",
+    "llm_mean": 70,
+    "llm_std": 2.739,
+    "hybrid_mean": 68.6,
+    "hybrid_std": 2.191
+  },
+  {
+    "sample_id": "quest2_poor",
+    "quality": "poor",
+    "llm_mean": 23.2,
+    "llm_std": 2.168,
+    "hybrid_mean": 21.6,
+    "hybrid_std": 1.673
+  },
+  {
+    "sample_id": "quest2_very_poor",
+    "quality": "very_poor",
+    "llm_mean": 20.4,
+    "llm_std": 1.342,
+    "hybrid_mean": 21.4,
+    "hybrid_std": 1.342
+  },
+  {
+    "sample_id": "quest3_excellent",
+    "quality": "excellent",
+    "llm_mean": 82,
+    "llm_std": 2.739,
+    "hybrid_mean": 77.6,
+    "hybrid_std": 2.191
+  },
+  {
+    "sample_id": "quest3_good",
+    "quality": "good",
+    "llm_mean": 79.6,
+    "llm_std": 0.548,
+    "hybrid_mean": 81.2,
+    "hybrid_std": 1.095
+  },
+  {
+    "sample_id": "quest3_average",
+    "quality": "average",
+    "llm_mean": 84,
+    "llm_std": 2.236,
+    "hybrid_mean": 85.2,
+    "hybrid_std": 1.789
+  },
+  {
+    "sample_id": "quest3_poor",
+    "quality": "poor",
+    "llm_mean": 35,
+    "llm_std": 2.739,
+    "hybrid_mean": 33.6,
+    "hybrid_std": 2.191
+  },
+  {
+    "sample_id": "quest3_very_poor",
+    "quality": "very_poor",
+    "llm_mean": 16,
+    "llm_std": 2.828,
+    "hybrid_mean": 23.4,
+    "hybrid_std": 2.302
+  },
+  {
+    "sample_id": "quest4_excellent",
+    "quality": "excellent",
+    "llm_mean": 64,
+    "llm_std": 5.339,
+    "hybrid_mean": 64.8,
+    "hybrid_std": 4.604
+  },
+  {
+    "sample_id": "quest4_good",
+    "quality": "good",
+    "llm_mean": 64.25,
+    "llm_std": 7.5,
+    "hybrid_mean": 65,
+    "hybrid_std": 6.0
+  },
+  {
+    "sample_id": "quest4_average",
+    "quality": "average",
+    "llm_mean": 53.6,
+    "llm_std": 2.793,
+    "hybrid_mean": 55.8,
+    "hybrid_std": 2.387
+  },
+  {
+    "sample_id": "quest4_poor",
+    "quality": "poor",
+    "llm_mean": 30.8,
+    "llm_std": 3.194,
+    "hybrid_mean": 33.2,
+    "hybrid_std": 2.683
+  },
+  {
+    "sample_id": "quest4_very_poor",
+    "quality": "very_poor",
+    "llm_mean": 12,
+    "llm_std": 0.0,
+    "hybrid_mean": 20,
+    "hybrid_std": 0.0
+  },
+  {
+    "sample_id": "quest5_excellent",
+    "quality": "excellent",
+    "llm_mean": 77.4,
+    "llm_std": 3.578,
+    "hybrid_mean": 79.6,
+    "hybrid_std": 3.286
+  },
+  {
+    "sample_id": "quest5_good",
+    "quality": "good",
+    "llm_mean": 59.2,
+    "llm_std": 4.025,
+    "hybrid_mean": 54.4,
+    "hybrid_std": 3.209
+  },
+  {
+    "sample_id": "quest5_average",
+    "quality": "average",
+    "llm_mean": 53.4,
+    "llm_std": 2.881,
+    "hybrid_mean": 55.6,
+    "hybrid_std": 2.51
+  },
+  {
+    "sample_id": "quest5_poor",
+    "quality": "poor",
+    "llm_mean": 24,
+    "llm_std": 4.123,
+    "hybrid_mean": 22.4,
+    "hybrid_std": 3.286
+  },
+  {
+    "sample_id": "quest5_very_poor",
+    "quality": "very_poor",
+    "llm_mean": 12,
+    "llm_std": 4.243,
+    "hybrid_mean": 20,
+    "hybrid_std": 3.536
+  },
+  {
+    "sample_id": "quest6_excellent",
+    "quality": "excellent",
+    "llm_mean": 76.4,
+    "llm_std": 3.507,
+    "hybrid_mean": 74,
+    "hybrid_std": 3.0
+  },
+  {
+    "sample_id": "quest6_good",
+    "quality": "good",
+    "llm_mean": 74.4,
+    "llm_std": 4.336,
+    "hybrid_mean": 75.4,
+    "hybrid_std": 3.647
+  },
+  {
+    "sample_id": "quest6_average",
+    "quality": "average",
+    "llm_mean": 68,
+    "llm_std": 0.0,
+    "hybrid_mean": 67,
+    "hybrid_std": 0.0
+  },
+  {
+    "sample_id": "quest6_poor",
+    "quality": "poor",
+    "llm_mean": 26.8,
+    "llm_std": 6.017,
+    "hybrid_mean": 25.8,
+    "hybrid_std": 5.02
+  },
+  {
+    "sample_id": "quest6_very_poor",
+    "quality": "very_poor",
+    "llm_mean": 12,
+    "llm_std": 0.0,
+    "hybrid_mean": 16,
+    "hybrid_std": 0.0
+  }
+]
