@@ -4,10 +4,11 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.throttling import ScopedRateThrottle  # [수정일: 2026-03-06] AI throttle
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from core.views.user_view import CsrfExemptSessionAuthentication  # [수정일: 2026-03-06] CSRF 우회 세션 인증
 import json
 import re
 import traceback
@@ -463,8 +464,9 @@ class ArchitectureEvaluationView(APIView):
     - 프롬프트는 백엔드에서 생성 (프론트엔드는 데이터만 전송)
     - 백엔드: 프롬프트 생성 + LLM 호출 담당
     """
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    # [수정일: 2026-03-06] 세션 쿠키로 인증하되 CSRF 토큰은 요구하지 않음
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [IsAuthenticated]
     # [수정일: 2026-03-06] AI API 요청 제한 (OpenAI 비용 보호, 10회/분)
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'ai'
@@ -573,8 +575,9 @@ class ArchitectureQuestionGeneratorView(APIView):
     [작성일: 2026-02-20]
     심화 질문 생성
     """
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    # [수정일: 2026-03-06] 세션 쿠키로 인증하되 CSRF 토큰은 요구하지 않음
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [IsAuthenticated]
     # [수정일: 2026-03-06] AI API 요청 제한 (OpenAI 비용 보호, 10회/분)
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'ai'

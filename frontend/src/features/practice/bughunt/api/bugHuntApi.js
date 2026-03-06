@@ -79,11 +79,13 @@ export async function verifyCodeBehavior(userCode, verificationCode, problemId =
 export async function evaluateBugHunt(missionTitle, steps, explanations, userCodes, performance = {}, interviewResults = {}) {
     try {
         console.log('🚀 API 호출 시작:', API_BASE_URL);
+        // [수정일: 2026-03-06] credentials 추가 (IsAuthenticated 인증용 세션 쿠키 전송)
         const response = await fetch(`${API_BASE_URL}/ai-bughunt-evaluate/`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify({
                 missionTitle,
                 steps,
@@ -139,9 +141,11 @@ export async function evaluateBugHunt(missionTitle, steps, explanations, userCod
  */
 export async function interviewBugHunt(stepContext, conversation, turn, candidateName = '') {
     try {
+        // [수정일: 2026-03-06] credentials 추가 (IsAuthenticated 인증용 세션 쿠키 전송)
         const response = await fetch(`${API_BASE_URL}/ai-bughunt-interview/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
                 step_context: stepContext,
                 conversation,
@@ -180,9 +184,11 @@ export async function interviewBugHunt(stepContext, conversation, turn, candidat
  * @param {(token: string) => void} onToken
  */
 export async function interviewBugHuntStream(stepContext, conversation, turn, candidateName = '', onToken = () => {}) {
+    // [수정일: 2026-03-06] credentials 추가 (IsAuthenticated 인증용 세션 쿠키 전송)
     const response = await fetch(`${API_BASE_URL}/ai-bughunt-interview/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
             step_context: stepContext,
             conversation,

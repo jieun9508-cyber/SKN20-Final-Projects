@@ -49,9 +49,11 @@ class TTSManager {
         const text = item.text;
 
         try {
+            // [수정일: 2026-03-06] credentials 추가 (IsAuthenticated 인증용 세션 쿠키 전송)
             const response = await fetch('/api/core/tts/synthesize/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({ text, voice: this.voice }),
             });
 

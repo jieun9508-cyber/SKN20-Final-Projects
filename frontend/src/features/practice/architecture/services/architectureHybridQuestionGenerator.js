@@ -19,11 +19,13 @@ export async function generateFollowUpQuestions(problem, components, connections
   console.log('🎯 심화 질문 생성 시작 (Backend API 호출)...');
 
   try {
+    // [수정일: 2026-03-06] credentials 추가 (IsAuthenticated 인증용 세션 쿠키 전송)
     const response = await fetch('/api/core/architecture/generate-questions/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
+      credentials: 'include',
       body: JSON.stringify({
         problem,
         components,

@@ -5,10 +5,11 @@ from django.conf import settings
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.throttling import ScopedRateThrottle  # [수정일: 2026-03-06] AI throttle
+from core.views.user_view import CsrfExemptSessionAuthentication  # [수정일: 2026-03-06] CSRF 우회 세션 인증
 
 # [수정일: 2026-02-08] AI Proxy View 추가 (Antigravity)
 @method_decorator(csrf_exempt, name='dispatch')
@@ -16,8 +17,9 @@ class AIProxyView(APIView):
     """
     OpenAI API 프록시 뷰 (프론트엔드에서 API Key 노출 방지)
     """
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    # [수정일: 2026-03-06] 세션 쿠키로 인증하되 CSRF 토큰은 요구하지 않음
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [IsAuthenticated]
     # [수정일: 2026-03-06] AI API 요청 제한 (OpenAI 비용 보호, 10회/분)
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'ai'

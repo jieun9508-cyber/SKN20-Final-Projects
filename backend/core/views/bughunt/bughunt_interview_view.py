@@ -10,18 +10,20 @@ from django.http import StreamingHttpResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework import status
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle  # [수정일: 2026-03-06] AI throttle
 from rest_framework.views import APIView
+from core.views.user_view import CsrfExemptSessionAuthentication  # [수정일: 2026-03-06] CSRF 우회 세션 인증
 
 class BugHuntInterviewView(APIView):
     """
     S4+ 딥다이브 면접 API.
     Step별로 LLM 면접관이 유저와 2~3턴 대화하며 이해도를 평가한다.
     """
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    # [수정일: 2026-03-06] 세션 쿠키로 인증하되 CSRF 토큰은 요구하지 않음
+    authentication_classes = [CsrfExemptSessionAuthentication]
+    permission_classes = [IsAuthenticated]
     # [수정일: 2026-03-06] AI API 요청 제한 (OpenAI 비용 보호, 10회/분)
     throttle_classes = [ScopedRateThrottle]
     throttle_scope = 'ai'
