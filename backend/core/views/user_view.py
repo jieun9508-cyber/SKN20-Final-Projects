@@ -282,12 +282,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"detail": error_msg})
 
 class IsOwner(permissions.BasePermission):
+    """
+    [수정일: 2026-03-06] 이메일 기반 소유자 확인으로 변경
+    - auth.User와 UserProfile의 PK가 다르므로, 이메일로 소유자를 판별
+    - 관리자(is_staff)는 항상 허용
+    """
     def has_object_permission(self, request, view, obj):
         if request.method in permissions.SAFE_METHODS:
             return True
-        # [수정일: 2026-02-07] PK가 정수로 변환되었으므로, 사용자 식별은 username 필드로 수행
-        is_owner = str(obj.username).strip() == str(request.user.username).strip()
-        print(f"DEBUG: IsOwner check - Obj Username: {obj.username}, User: {request.user.username} -> Result: {is_owner}", flush=True)
+        # 관리자는 항상 수정 가능
+        if request.user.is_staff or request.user.is_superuser:
+            return True
+        # 이메일 매칭으로 소유자 확인 (auth.User.email == UserProfile.email)
+        is_owner = obj.email == request.user.email
         return is_owner
 
 class CsrfExemptSessionAuthentication(SessionAuthentication):
@@ -334,6 +341,24 @@ class UserProfileViewSet(viewsets.ModelViewSet):
 
         return response
 
+    def get_object(self):
+        """
+        [수정일: 2026-03-06] 404 에러 수정: PK가 정수가 아닌 경우(username 등) fallback 처리
+        - auth_view.py에서 UserProfile이 없을 때 user.username을 id로 반환하는 경우 대응
+        """
+        pk = self.kwargs.get('pk')
+        try:
+            obj = UserProfile.objects.get(pk=pk)
+        except (UserProfile.DoesNotExist, ValueError, TypeError):
+            # PK 조회 실패 시 username으로 재시도
+            try:
+                obj = UserProfile.objects.get(username=pk)
+            except UserProfile.DoesNotExist:
+                from rest_framework.exceptions import NotFound
+                raise NotFound(f"UserProfile을 찾을 수 없습니다: {pk}")
+        self.check_object_permissions(self.request, obj)
+        return obj
+
     def partial_update(self, request, *args, **kwargs):
         print(f"DEBUG PATCH: User={request.user} (Authenticated={request.user.is_authenticated}), ID={kwargs.get('pk')}", flush=True)
         try:
@@ -345,7 +370,6 @@ class UserProfileViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
         if self.action in ['update', 'partial_update', 'destroy']:
-            # [수정일: 2026-02-07] 임시: IsOwner 비활성화하여 인증 문제인지 확인
-            print(f"DEBUG get_permissions: action={self.action}", flush=True)
-            return [permissions.IsAuthenticated()]  # IsOwner() 임시 제거
+            # [수정일: 2026-03-06] IsOwner 복원 (이메일 매칭 기반으로 안전하게 동작)
+            return [permissions.IsAuthenticated(), IsOwner()]
         return [permissions.AllowAny()]
